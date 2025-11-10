@@ -1,0 +1,73 @@
+import { createRouter, createWebHistory } from 'vue-router';
+import MainLayout from '@/layouts/MainLayout.vue';
+import DashboardView from '@/views/DashboardView.vue';
+import RealtimeView from '@/views/RealtimeView.vue';
+import InfoView from '@/views/InfoView.vue';
+import LoginView from '@/views/LoginView.vue';
+
+// (★추가★) '내 정보' 뷰 import
+import MyProfileView from '@/views/MyProfileView.vue';
+
+const routes = [
+    {
+        path: '/login',
+        name: 'Login',
+        component: LoginView,
+        meta: { requiresAuth: false },
+    },
+    {
+        path: '/',
+        component: MainLayout,
+        meta: { requiresAuth: true },
+        children: [
+            {
+                path: '',
+                name: 'Dashboard',
+                component: DashboardView,
+            },
+            {
+                path: '/realtime',
+                name: 'Realtime',
+                component: RealtimeView,
+            },
+            {
+                path: '/info',
+                name: 'Info',
+                component: InfoView,
+            },
+            // (★추가★) '/profile' 경로
+            {
+                path: '/profile',
+                name: 'MyProfile',
+                component: MyProfileView,
+            },
+            // { path: '/stats', ... }
+        ],
+    },
+];
+
+// ... (router.beforeEach 네비게이션 가드 부분은 동일) ...
+
+const router = createRouter({
+    history: createWebHistory(import.meta.env.BASE_URL),
+    routes,
+    linkActiveClass: 'router-link-active',
+});
+
+router.beforeEach((to, from, next) => {
+    // 1. (★수정★) LoginView와 동일하게 sessionStorage에서 'user_id'를 확인
+    const isLoggedIn = !!sessionStorage.getItem('user_id');
+
+    if (to.meta.requiresAuth && !isLoggedIn) {
+        // 2. (로그인 안 됨) 보호된 페이지 접근 시 -> 로그인 페이지로
+        next('/login');
+    } else if (to.path === '/login' && isLoggedIn) {
+        // 3. (로그인 됨) 로그인 페이지 접근 시 -> 메인 페이지로
+        next('/');
+    } else {
+        // 4. (그 외) 정상 이동
+        next();
+    }
+});
+
+export default router;

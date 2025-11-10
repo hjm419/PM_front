@@ -1,0 +1,82 @@
+.user-analysis-card {
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    padding: 24px;
+    height: 100%;
+}
+
+.card-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    color: #1f2937;
+}
+
+.analysis-content {
+    display: grid;
+    /* flex 대신 grid를 사용해야 시안처럼 
+      두 목록이 1:1 비율을 정확히 가집니다.
+    */
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.user-list-wrapper {
+    flex: 1;
+    /* 시안에 맞는 연분홍색 배경으로 수정합니다. 
+    */
+    background-color: #fdf2f8;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+/* 시안의 오른쪽 (더 연한) 분홍색 배경입니다.
+*/
+.user-list-wrapper.highlight {
+    background-color: #fff1f2;
+}
+
+.list-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    /* 시안에 맞는 분홍색 계열로 수정합니다.
+    */
+    color: #c026d3;
+    margin: 0 0 12px 0;
+}
+
+.user-list-wrapper.highlight .list-title {
+    /* 시안에 맞는 빨간색 계열로 수정합니다.
+    */
+    color: #e11d48;
+}
+
+.user-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.user-list li {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+    color: #1f2937;
+}
+
+/* 'user1234 - 5회' 처럼 점수가 아닌 텍스트도 
+  오른쪽 정렬 및 bold 처리를 합니다.
+*/
+.user-list li span:last-child {
+    font-weight: 600;
+}
+
+/* '위험 점수'의 빨간색 텍스트 스타일 */
+.score-bad {
+    color: #ef4444;
+    font-weight: 600;
+}

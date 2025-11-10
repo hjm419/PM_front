@@ -1,0 +1,115 @@
+/*
+ * .map-container는 RealtimeMap.vue 컴포넌트의 루트 요소입니다.
+ * 부모 그리드 셀(RealtimeView.vue)의 100% 높이를 차지해야 합니다.
+ */
+.map-container {
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    position: relative;
+    height: 100%;
+}
+
+.map-view {
+    width: 100%;
+    height: 100%;
+    background-color: #f3f4f6;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* (★삭제★) 드롭다운 관련 스타일 제거 */
+/*
+.region-dropdowns { ... }
+.region-dropdowns select { ... }
+*/
+
+/* 범례를 맵 안으로 이동 (하단 중앙) */
+.map-legend {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 8px 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.legend-label {
+    font-size: 0.75rem;
+    color: #4b5563;
+    font-weight: 500;
+}
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+.color-danger {
+    background-color: #ef4444;
+}
+.color-low {
+    background-color: #f59e0b;
+}
+.color-mid {
+    background-color: #34d399; /* 초록색 */
+}
+.color-high {
+    background-color: #3b82f6;
+}
+
+/* (★삭제★) 장비등록 버튼 관련 스타일 제거 */
+/*
+.register-pm-btn { ... }
+.register-pm-btn:hover { ... }
+*/
+
+/* 맵 컨트롤 - 맵(.map-view)의 우측 하단 */
+.map-controls {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.map-control-btn {
+    width: 30px;
+    height: 30px;
+    background-color: #ffffff;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.map-control-btn:hover {
+    background-color: #f9fafb;
+}
+.map-control-btn svg {
+    width: 100%;
+    height: 100%;
+    color: #374151;
+}
+.map-control-divider {
+    height: 1px;
+    background-color: #e5e7eb;
+}
