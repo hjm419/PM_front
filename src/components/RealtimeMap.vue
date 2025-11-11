@@ -71,8 +71,7 @@
 </template>
 
 <script setup>
-// (★수정★) computed 삭제
-import { ref, onMounted, watch, nextTick } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 
 const props = defineProps({
     districts: { type: Object, required: true },
@@ -83,22 +82,15 @@ const mapInstance = ref(null);
 const mapLoaded = ref(false);
 const pmOverlays = ref([]);
 
-// (★삭제★) selectedSiDo, selectedSiGunGu, siGunGuList 관련 로직 모두 제거
-// const selectedSiDo = ref('');
-// const selectedSiGunGu = ref('');
-// const siGunGuList = computed(...);
-
-// 대시보드(MapInfo.vue)에서 사용하는 킥보드 아이콘 SVG 문자열
 const kickboardSVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M18.5 12H16V9H18.5V12ZM18.15 13C18.6 13 19 13.4 19 13.85C19 14.3 18.6 14.7 18.15 14.7C17.7 14.7 17.3 14.3 17.3 13.85C17.3 13.4 17.7 13 18.15 13ZM6.85 13C7.3 13 7.7 13.4 7.7 13.85C7.7 14.3 7.3 14.7 6.85 14.7C6.4 14.7 6 14.3 6 13.85C6 13.4 6.4 13 6.85 13ZM5.5 12H8V9H5.5V12ZM14.75 16H9.25C9.25 16 9 15.75 9 15.5C9 15.25 9.25 15 9.25 15H14.75C14.75 15 15 15.25 15 15.5C15 15.75 14.75 16 14.75 16ZM19 16.5V18H5V16.5L6.5 15.25H17.5L19 16.5ZM13.5 6.5H10.5L11.25 4H12.75L13.5 6.5Z" /></svg>`;
 
+/**
+ * (★수정★)
+ * onMounted에서 nextTick을 제거하고 loadMapScript를 바로 호출합니다.
+ */
 onMounted(() => {
-    nextTick(() => {
-        loadMapScript();
-    });
+    loadMapScript();
 });
-
-// (★삭제★) props.districts 감시 로직 제거
-// watch(() => props.districts, ...);
 
 watch(
     () => props.users,
@@ -110,22 +102,26 @@ watch(
     { deep: true }
 );
 
+/**
+ * (★핵심 수정★)
+ * autoload=true로 변경했으므로, window.kakao.maps.load()를 호출할 필요가 없습니다.
+ * 대신, API가 완전히 로드되어 'Map' 생성자가 정의될 때까지 100ms 간격으로 재시도합니다.
+ */
 const loadMapScript = () => {
     if (window.kakao && window.kakao.maps && window.kakao.maps.Map) {
+        // API가 완전히 로드됨 (Map 생성자 확인)
         initMap();
-        return;
-    }
-    if (window.kakao && window.kakao.maps && typeof window.kakao.maps.load === 'function') {
-        window.kakao.maps.load(() => {
-            initMap();
-        });
     } else {
-        console.error('Kakao Maps 스크립트를 찾을 수 없습니다. index.html을 확인하세요.');
+        // 아직 로드되지 않음 (새로고침 경합 상태)
+        setTimeout(loadMapScript, 100); // 100ms 후 재시도
     }
 };
 
-const initMap = async () => {
-    await nextTick();
+/**
+ * (★수정★)
+ * initMap 내부의 nextTick 제거 (이미 onMounted 시점이라 DOM이 준비됨)
+ */
+const initMap = () => {
     const mapContainer = document.getElementById('realtime-map');
     if (!mapContainer || mapInstance.value) return;
 
@@ -138,8 +134,6 @@ const initMap = async () => {
     mapInstance.value = new window.kakao.maps.Map(mapContainer, mapOption);
     mapLoaded.value = true;
     mapInstance.value.relayout();
-
-    // (★삭제★) moveMap() 호출 로직 제거
 
     if (props.users.length > 0) {
         displayPMsOnMap(props.users);
@@ -157,9 +151,6 @@ const zoomOut = () => {
         mapInstance.value.setLevel(mapInstance.value.getLevel() + 1);
     }
 };
-
-// (★삭제★) moveMap 함수 제거
-// const moveMap = () => { ... };
 
 const goToMyLocation = () => {
     if (!mapInstance.value) {

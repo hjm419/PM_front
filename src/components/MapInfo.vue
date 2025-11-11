@@ -81,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 
 const props = defineProps({
     pmData: {
@@ -98,11 +98,12 @@ const mapInstance = ref(null);
 const mapLoaded = ref(false);
 const pmOverlays = ref([]);
 
+/**
+ * (★수정★)
+ * onMounted에서 nextTick을 제거하고 loadMapScript를 바로 호출합니다.
+ */
 onMounted(() => {
-    // (★수정★) nextTick 추가
-    nextTick(() => {
-        loadMapScript();
-    });
+    loadMapScript();
 });
 
 watch(
@@ -115,30 +116,28 @@ watch(
     { deep: true }
 );
 
+/**
+ * (★핵심 수정★)
+ * autoload=true로 변경했으므로, window.kakao.maps.load()를 호출할 필요가 없습니다.
+ * 대신, API가 완전히 로드되어 'Map' 생성자가 정의될 때까지 100ms 간격으로 재시도합니다.
+ */
 const loadMapScript = () => {
     if (window.kakao && window.kakao.maps && window.kakao.maps.Map) {
+        // API가 완전히 로드됨 (Map 생성자 확인)
         initMap();
-        return;
-    }
-    if (window.kakao && window.kakao.maps && typeof window.kakao.maps.load === 'function') {
-        window.kakao.maps.load(() => {
-            initMap();
-        });
     } else {
-        console.error('Kakao Maps 스크립트를 찾을 수 없습니다. index.html을 확인하세요.');
+        // 아직 로드되지 않음 (새로고침 경합 상태)
+        setTimeout(loadMapScript, 100); // 100ms 후 재시도
     }
 };
 
-// (★핵심 수정★)
-// 맵 생성 로직을 nextTick으로 감싸서 렌더링 완료 후 실행
-const initMap = async () => {
-    // Vue가 CSS 렌더링을 완료할 때까지 기다립니다.
-    await nextTick();
-
+/**
+ * (★수정★)
+ * initMap 내부의 nextTick 제거 (이미 onMounted 시점이라 DOM이 준비됨)
+ */
+const initMap = () => {
     const mapContainer = document.getElementById('dashboard-map');
     if (!mapContainer || mapInstance.value) return;
-
-    // (★삭제★) 높이 0 체크 로직 제거
 
     const mapOption = {
         center: new window.kakao.maps.LatLng(35.8244, 128.738),
@@ -149,7 +148,6 @@ const initMap = async () => {
     mapInstance.value = new window.kakao.maps.Map(mapContainer, mapOption);
     mapLoaded.value = true;
 
-    // (★수정★) 맵 생성 직후 relayout 호출
     mapInstance.value.relayout();
     if (props.pmData.length > 0) {
         displayPMsOnMap(props.pmData);
