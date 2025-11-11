@@ -44,13 +44,21 @@ const router = useRouter();
 
 const handleLogout = async () => {
     try {
-        // (★수정★) '/api' 접두사 제거
-        await apiClient.post('/userLogout.json');
+        // ⬇️ (핵심 수정) '/userLogout.json' -> '/auth/logout'
+        // (baseURL: '/api' + '/auth/logout' = '/api/auth/logout')
+        await apiClient.post('/auth/logout');
+
+        console.log('백엔드 로그아웃 요청 성공');
     } catch (error) {
+        // 백엔드 API 호출이 실패해도 프론트엔드에서는 로그아웃을 강행합니다.
         console.error('로그아웃 API 호출 실패:', error);
     } finally {
-        // (★수정★) localStorage -> sessionStorage
-        sessionStorage.clear(); // 로그인 관련 모든 정보 삭제
+        // (중요) localStorage에서 'user' 객체를 제거
+        localStorage.removeItem('user');
+
+        // 로그인 페이지로 이동 (페이지 새로고침)
+        // router.push('/login') 대신 window.location을 사용하면
+        // 모든 상태(State)가 초기화되어 더 안전합니다.
         window.location.href = '/login';
     }
 };

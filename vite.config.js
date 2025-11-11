@@ -19,11 +19,7 @@ export default defineConfig({
             '/api': {
                 target: 'http://localhost:8080',
                 changeOrigin: true,
-                // rewrite: (path) => path.replace(/^\/api/, ''), // 백엔드로 보낼 때 '/api'는 제거
-                // (★핵심 수정★)
-                // rewrite 규칙을 다시 복원합니다.
-                // /api/userSelectOne.json -> /userSelectOne.json
-                rewrite: (path) => path.replace(/^\/api/, ''),
+                // rewrite: (path) => path.replace(/^\/api/, ''),
             },
         },
     },
