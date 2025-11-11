@@ -211,7 +211,7 @@
 import { ref, computed, onMounted } from 'vue';
 import StatsKpiCard from '@/components/StatsKpiCard.vue';
 import StatCard from '@/components/StatCard.vue';
-// (★핵심 수정★) InfoSelect -> InfoInput
+// (★핵심 수정★) InfoInput을 import 합니다.
 import InfoInput from '@/components/ui/InfoInput.vue';
 import InfoButton from '@/components/ui/InfoButton.vue';
 import InfoBadge from '@/components/ui/InfoBadge.vue';
@@ -223,8 +223,6 @@ import PieChart from '@/components/charts/PieChart.vue';
 const startDate = ref('2025-11-01');
 const endDate = ref('2025-11-05');
 const showRiskTable = ref(false);
-
-// (★삭제★) periodFilter, periodOptions 제거
 
 // --- 7개 KPI 데이터를 ref로 변경 ---
 const kpiData = ref({

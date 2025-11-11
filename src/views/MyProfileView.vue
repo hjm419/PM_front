@@ -61,7 +61,6 @@
 
             <div class="profile-card full-width">
                 <h3 class="card-title">내 활동 로그 (★Mock Data)</h3>
-
                 <div class="log-filter-form">
                     <div class="log-filter-grid">
                         <div>
@@ -82,7 +81,6 @@
                         로그 검색
                     </InfoButton>
                 </div>
-
                 <div class="profile-table-wrapper">
                     <table class="profile-table">
                         <thead class="profile-table-header">
@@ -104,7 +102,6 @@
                         </tbody>
                     </table>
                 </div>
-
                 <div class="pagination-controls">
                     <p>총 {{ totalLogs }}개의 로그</p>
                     <div class="pagination-buttons">
@@ -139,12 +136,10 @@ import InfoInput from '@/components/ui/InfoInput.vue';
 import InfoButton from '@/components/ui/InfoButton.vue';
 
 // --- 1. 로그인한 사용자 ID 가져오기 ---
+/** (★수정★) localStorage -> sessionStorage, 'user' -> 'user_id' */
 const getLoggedInUserId = () => {
-    const user = localStorage.getItem('user');
-    if (user) {
-        return JSON.parse(user).user_id;
-    }
-    return null;
+    // LoginView.vue와 router/index.js에서 사용한 'user_id' 키를 사용합니다.
+    return sessionStorage.getItem('user_id');
 };
 
 // --- 2. 프로필 폼 ---
@@ -159,25 +154,26 @@ const newPw = ref('');
 const confirmPw = ref('');
 
 /**
- * (★추가★)
+ * (★수정★)
  * 페이지 로드 시, 내 정보(기본 계정 정보)를 불러옵니다.
  */
 const loadMyProfile = async () => {
     const userId = getLoggedInUserId();
     if (!userId) {
         alert('로그인 정보가 없습니다. 다시 로그인해주세요.');
-        // (로그아웃 처리)
-        localStorage.removeItem('user');
+        // (★수정★) localStorage -> sessionStorage
+        sessionStorage.clear(); // 로그인 관련 모든 정보 삭제
         window.location.href = '/login';
         return;
     }
 
     try {
-        // (★추가★) Spring API 호출 (UserController -> /userSelectOne.json)
+        // (★수정★) '/api' 접두사 제거 (vite.config.js에서 처리)
         const response = await apiClient.post('/userSelectOne.json', { user_id: userId });
 
-        if (response.result) {
-            const profile = response.result;
+        if (response) {
+            // (★수정★) interceptor가 data.result를 반환
+            const profile = response;
             adminName.value = profile.user_name;
             adminPhone.value = profile.user_telno;
             adminEmail.value = profile.user_eml;
@@ -191,7 +187,6 @@ const loadMyProfile = async () => {
 };
 
 /**
- * (★수정★)
  * '변경사항 저장' 버튼 클릭 시
  */
 const saveProfile = async () => {
@@ -208,11 +203,11 @@ const saveProfile = async () => {
             user_telno: adminPhone.value,
             user_eml: adminEmail.value,
         };
-
-        // (★추가★) Spring API 호출 (UserController -> /MyUserUpdate.json)
+        // (★수정★) '/api' 접두사 제거
         const response = await apiClient.post('/MyUserUpdate.json', params);
 
-        if (response.result > 0) {
+        if (response > 0) {
+            // (★수정★) interceptor가 data.result를 반환
             alert('프로필이 성공적으로 저장되었습니다.');
             window.location.reload();
         } else {
@@ -225,7 +220,6 @@ const saveProfile = async () => {
 };
 
 /**
- * (★수정★)
  * '비밀번호 변경' 버튼 클릭 시
  */
 const changePassword = async () => {
@@ -250,17 +244,14 @@ const changePassword = async () => {
             old_pw: currentPw.value,
             new_pw: newPw.value,
         };
-
-        // (★추가★) Spring API 호출 (UserController -> /userPwUpdate.json)
+        // (★수정★) '/api' 접두사 제거
         const response = await apiClient.post('/userPwUpdate.json', params);
 
-        // (★수정★) userPwCheck를 통과하지 못하면 0을 반환할 수 있음
-        // (UserServiceImpl.java -> userPwCheck가 userPwUpdate 전에 호출되어야 함 - 현재 로직 분리 필요)
-        // (백엔드 userPwUpdate.json이 0을 반환할 수 있음)
-        if (response.result > 0) {
+        if (response > 0) {
+            // (★수정★) interceptor가 data.result를 반환
             alert('비밀번호가 변경되었습니다. 다시 로그인해주세요.');
-            // 로그아웃 처리
-            localStorage.removeItem('user');
+            // (★수정★) localStorage -> sessionStorage
+            sessionStorage.clear();
             window.location.href = '/login';
         } else {
             alert('비밀번호 변경에 실패했습니다. (현재 비밀번호가 틀렸거나 오류 발생)');
@@ -271,7 +262,8 @@ const changePassword = async () => {
     }
 };
 
-// --- 4. 내 활동 로그 (★Mock Data 유지★) ---
+// --- 4. 내 활동 로그 (Mock Data 유지) ---
+// ... (fetchLogs 등 Mock 데이터 관련 로직은 동일) ...
 const startDate = ref('');
 const endDate = ref('');
 const logSearchTerm = ref('');
@@ -315,12 +307,8 @@ const handleLogSearch = () => {
     fetchLogs(1); // 1페이지로 리셋하고 검색
 };
 
-// (★수정★)
 onMounted(() => {
-    // 1. 내 프로필 정보 로드
     loadMyProfile();
-
-    // 2. 내 활동 로그 첫 페이지 로드 (Mock)
     fetchLogs(1);
 });
 </script>

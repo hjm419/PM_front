@@ -27,17 +27,17 @@
     align-items: flex-end;
 }
 
-/* (★수정★) 날짜 input과 라벨을 묶는 래퍼 */
+/* (★핵심 수정★) 날짜 input과 라벨을 묶는 래퍼 */
 .filter-item {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    width: 150px; /* (★수정★) 너비 지정 */
+    width: 150px; /* 너비 지정 */
 }
 
-/* (★수정★) '시작일', '종료일' 라벨 스타일 */
+/* (★핵심 수정★) '시작일', '종료일' 라벨 스타일 */
 .filter-label {
-    display: block; /* (★핵심 수정★) 라벨이 한 줄을 차지하도록 */
+    display: block; /* 라벨이 한 줄을 차지하도록 */
     font-size: 0.875rem; /* 14px */
     font-weight: 500;
     color: #4b5563; /* gray-600 */
