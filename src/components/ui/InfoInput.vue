@@ -30,8 +30,8 @@ defineEmits(['update:modelValue']);
 */
 .info-input[type='date'] {
     line-height: 1.25rem;
-    /* padding-top, padding-bottom을 제거하여
-       CommonUI.css의 padding (0.5rem 0.75rem)을 
-       그대로 사용하도록 합니다. */
+    /* CommonUI.css의 padding (0.5rem 0.75rem)을
+      그대로 사용하도록 로컬 padding을 제거합니다.
+    */
 }
 </style>

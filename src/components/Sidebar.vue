@@ -37,31 +37,20 @@
 </template>
 
 <script setup>
-// (★수정★) useRouter와 apiClient import
 import { useRouter } from 'vue-router';
-import apiClient from '@/api/index.js'; // apiClient 가져오기
+import apiClient from '@/api/index.js';
 
 const router = useRouter();
 
-// (★수정★) 임시 로그아웃을 실제 API 연동으로 변경
 const handleLogout = async () => {
     try {
-        // Spring 백엔드의 /userLogout.json API 호출
-        // UserController.java의 userLogout() 메서드 실행
+        // (★수정★) '/api' 접두사 제거
         await apiClient.post('/userLogout.json');
-
-        // (참고) 백엔드에서 세션이 무효화되었으므로,
-        // 프론트엔드에서도 로그인 상태를 제거합니다.
     } catch (error) {
-        // API 호출이 실패하더라도 프론트엔드에서는 로그아웃 처리를 강행합니다.
         console.error('로그아웃 API 호출 실패:', error);
     } finally {
-        // (★수정★) sessionStorage -> localStorage
-        localStorage.removeItem('user');
-
-        // 로그인 페이지로 이동 (페이지 새로고침)
-        // router.push('/login') 대신 window.location을 사용하면
-        // 모든 상태(State)가 초기화되어 더 안전합니다.
+        // (★수정★) localStorage -> sessionStorage
+        sessionStorage.clear(); // 로그인 관련 모든 정보 삭제
         window.location.href = '/login';
     }
 };

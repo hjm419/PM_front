@@ -15,11 +15,14 @@ export default defineConfig({
 
     server: {
         proxy: {
-            // '/api'로 시작하는 모든 요청을 백엔드(3000번 포트)로 전달
+            // '/api'로 시작하는 모든 요청을 백엔드(8080번 포트)로 전달
             '/api': {
-                target: 'http://localhost:8080', // 새 Express 백엔드 주소
+                target: 'http://localhost:8080',
                 changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/api/, ''), // 백엔드로 보낼 때 '/api'는 제거
+                // (★핵심 수정★)
+                // rewrite 규칙을 다시 복원합니다.
+                // /api/userSelectOne.json -> /userSelectOne.json
+                rewrite: (path) => path.replace(/^\/api/, ''),
             },
         },
     },
