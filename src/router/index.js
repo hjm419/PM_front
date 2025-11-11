@@ -51,8 +51,6 @@ const routes = [
     },
 ];
 
-// ... (router.beforeEach 네비게이션 가드 부분은 동일) ...
-
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes,
@@ -60,8 +58,9 @@ const router = createRouter({
 });
 
 router.beforeEach((to, from, next) => {
-    // 1. (★수정★) LoginView와 동일하게 sessionStorage에서 'user_id'를 확인
-    const isLoggedIn = !!sessionStorage.getItem('user_id');
+    // 1. (★수정★) sessionStorage 대신 localStorage에서 'user' 객체를 확인
+    const user = localStorage.getItem('user');
+    const isLoggedIn = !!user; // user 문자열이 있으면 true
 
     if (to.meta.requiresAuth && !isLoggedIn) {
         // 2. (로그인 안 됨) 보호된 페이지 접근 시 -> 로그인 페이지로

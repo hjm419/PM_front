@@ -19,7 +19,7 @@ export default defineConfig({
             '/api': {
                 target: 'http://localhost:8080', // 새 Express 백엔드 주소
                 changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/api/, ''), // 백엔드로 보낼 때 '/api'는 제거
+                // rewrite: (path) => path.replace(/^\/api/, ''), // 백엔드로 보낼 때 '/api'는 제거
             },
         },
     },

@@ -79,7 +79,7 @@ const fetchKpiData = async () => {
         // (★추가★) /api/trip/selectAvgStats.json 호출
         // TripController.java -> tripDataSelectAvgStats()
         // params는 startDate, end_date를 받을 수 있지만, 여기서는 전체 조회를 위해 빈 객체 전송
-        const response = await apiClient.post('/api/trip/selectAvgStats.json', {});
+        const response = await apiClient.post('/trip/selectAvgStats.json', {});
 
         // (★추가★) 백엔드 데이터를 프론트엔드 형식으로 매핑
         if (response.result) {
@@ -107,7 +107,7 @@ const fetchChartData = async () => {
     try {
         // (★추가★) 차트 1: 월별 평균 안전 점수
         // TripController.java -> selectMonthlyAvgScore()
-        const scoreResponse = await apiClient.post('/api/trip/selectMonthlyAvgScore.json');
+        const scoreResponse = await apiClient.post('/trip/selectMonthlyAvgScore.json');
 
         if (scoreResponse.result) {
             chartData.value.helmet.data = {
@@ -122,7 +122,7 @@ const fetchChartData = async () => {
 
         // (★추가★) 차트 2: 시간대별 위험 통계 (기존 '도로 준수율' 대체)
         // TripController.java -> selectTripHourlyStats()
-        const hourlyResponse = await apiClient.post('/api/trip/selectTripHour.json', {});
+        const hourlyResponse = await apiClient.post('/trip/selectTripHour.json', {});
 
         if (hourlyResponse.result) {
             // 0시~23시 배열 생성

@@ -29,7 +29,7 @@ import apiClient from '@/api';
 
 const router = useRouter();
 
-// T_USER 테이블의 login_id, user_pw 컬럼과 일치
+// t_user 스키마의 login_id, user_pw와 일치
 const loginData = ref({
     login_id: '',
     user_pw: '',
@@ -43,25 +43,23 @@ const userLogin = async () => {
     }
 
     try {
-        // 1. T_USER 테이블의 컬럼명과 일치하는 JSON으로 서버에 요청
+        // 1. (수정됨) auth.service.js가 반환한 { token, user } 객체가 loginResult가 됨
         const loginResult = await apiClient.post('/auth/login', {
             login_id: loginData.value.login_id,
             user_pw: loginData.value.user_pw,
         });
 
-        // 2. (로그인 성공)
-        //    백엔드가 T_USER에서 찾은 정보를 반환 (user_id, nickname, role 등)
-        if (loginResult && loginResult.user_id) {
-            // 3. (수정됨) T_USER 테이블 정보를 sessionStorage에 저장
-            sessionStorage.setItem('user_id', loginResult.user_id);
-
-            // T_USER의 nickname과 role 컬럼 정보도 저장
-            if (loginResult.nickname) {
-                sessionStorage.setItem('nickname', loginResult.nickname);
-            }
-            if (loginResult.role) {
-                sessionStorage.setItem('role', loginResult.role);
-            }
+        // 2. (수정됨) loginResult.user 객체와 user_id가 있는지 확인
+        if (loginResult && loginResult.user && loginResult.user.user_id) {
+            // 3. (핵심 수정)
+            // MyProfileView, Sidebar와 일치하도록 'localStorage'에
+            // 'user' 객체 전체를 JSON 문자열로 저장합니다.
+            // (token도 user 객체에 포함시켜 저장)
+            const userToStore = {
+                ...loginResult.user,
+                token: loginResult.token,
+            };
+            localStorage.setItem('user', JSON.stringify(userToStore));
 
             errorMsg.value = null;
             router.push('/'); // 대시보드 페이지로 이동
@@ -70,9 +68,9 @@ const userLogin = async () => {
             errorMsg.value = '아이디 또는 비밀번호가 일치하지 않습니다.';
         }
     } catch (error) {
-        // 5. (로그인 실패) 서버 에러
+        // 5. (로그인 실패) 서버 에러 또는 apiResponse.success === false
         console.error('로그인 실패 또는 서버 오류:', error);
-        errorMsg.value = '로그인 중 오류가 발생했습니다.';
+        errorMsg.value = error.message || '로그인 중 오류가 발생했습니다.';
     }
 };
 </script>
