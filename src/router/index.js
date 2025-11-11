@@ -4,9 +4,10 @@ import DashboardView from '@/views/DashboardView.vue';
 import RealtimeView from '@/views/RealtimeView.vue';
 import InfoView from '@/views/InfoView.vue';
 import LoginView from '@/views/LoginView.vue';
-
-// (★추가★) '내 정보' 뷰 import
 import MyProfileView from '@/views/MyProfileView.vue';
+
+// (★추가★) '통계 분석' 뷰 import
+import StatsView from '@/views/StatsView.vue';
 
 const routes = [
     {
@@ -35,13 +36,17 @@ const routes = [
                 name: 'Info',
                 component: InfoView,
             },
-            // (★추가★) '/profile' 경로
+            // (★추가★) '/stats' 경로
+            {
+                path: '/stats',
+                name: 'Stats',
+                component: StatsView,
+            },
             {
                 path: '/profile',
                 name: 'MyProfile',
                 component: MyProfileView,
             },
-            // { path: '/stats', ... }
         ],
     },
 ];

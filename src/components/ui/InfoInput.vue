@@ -24,11 +24,14 @@ defineEmits(['update:modelValue']);
 <style scoped src="../../assets/styles/components/info/CommonUI.css"></style>
 
 <style scoped>
+/* (★핵심 수정★)
+ date input이 CommonUI.css의 height: 36px를 유지하면서
+ 내부 텍스트가 세로 중앙에 오도록 line-height만 조절합니다.
+*/
 .info-input[type='date'] {
-    /* InfoInput.vue가 36px/40px 등 높이가 고정되어 있어 
-       date input이 내부에서 찌그러지는 현상 보정 */
     line-height: 1.25rem;
-    padding-top: 0.4rem;
-    padding-bottom: 0.4rem;
+    /* padding-top, padding-bottom을 제거하여
+       CommonUI.css의 padding (0.5rem 0.75rem)을 
+       그대로 사용하도록 합니다. */
 }
 </style>

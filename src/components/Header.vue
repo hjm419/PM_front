@@ -41,14 +41,12 @@
 </template>
 
 <script setup>
-// (★수정★) computed와 useRoute 추가
 import { ref, onMounted, onUnmounted, computed } from 'vue';
-import { useRoute } from 'vue-router'; // (★추가★)
+import { useRoute } from 'vue-router';
 
 const currentDate = ref('');
 let intervalId = null;
 
-// (★추가★) 현재 라우트를 기반으로 페이지 제목을 동적으로 설정
 const route = useRoute();
 const pageTitle = computed(() => {
     switch (route.name) {
@@ -58,6 +56,9 @@ const pageTitle = computed(() => {
             return '실시간 관제';
         case 'Info':
             return '정보 조회';
+        // (★핵심 수정★) 'Stats' 케이스 추가
+        case 'Stats':
+            return '통계 분석';
         case 'MyProfile':
             return '내 정보 관리';
         default:
@@ -66,7 +67,6 @@ const pageTitle = computed(() => {
 });
 
 const getFormattedDate = () => {
-    // ... (날짜 포맷 함수 동일) ...
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
