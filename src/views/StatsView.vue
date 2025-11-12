@@ -10,7 +10,7 @@
                     <label class="filter-label">종료일</label>
                     <InfoInput type="date" v-model="endDate" />
                 </div>
-                <InfoButton variant="default" @click="fetchKpiData">
+                <InfoButton variant="default" @click="fetchAllStatsData">
                     <template #icon><v-icon name="bi-search" /></template>
                     조회
                 </InfoButton>
@@ -138,11 +138,11 @@
                             </tr>
                         </thead>
                         <tbody class="info-table-body">
-                            <tr v-for="(item, index) in topRegionsData" :key="item.region" class="info-table-row">
+                            <tr v-for="item in topRegionsData" :key="item.regionName" class="info-table-row">
                                 <td class="info-table-cell" style="text-align: center; font-weight: 600">
-                                    {{ index + 1 }}
+                                    {{ item.rank }}
                                 </td>
-                                <td class="info-table-cell">{{ item.region }}</td>
+                                <td class="info-table-cell">{{ item.regionName }}</td>
                                 <td class="info-table-cell" style="text-align: right; font-weight: 600">
                                     {{ item.count }} 건
                                 </td>
@@ -209,9 +209,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import apiClient from '@/api/index.js'; // (★추가★)
 import StatsKpiCard from '@/components/StatsKpiCard.vue';
 import StatCard from '@/components/StatCard.vue';
-// (★핵심 수정★) InfoInput을 import 합니다.
 import InfoInput from '@/components/ui/InfoInput.vue';
 import InfoButton from '@/components/ui/InfoButton.vue';
 import InfoBadge from '@/components/ui/InfoBadge.vue';
@@ -220,85 +220,182 @@ import BarChart from '@/components/charts/BarChart.vue';
 import PieChart from '@/components/charts/PieChart.vue';
 
 // --- 기간 필터 상태 ---
-const startDate = ref('2025-11-01');
-const endDate = ref('2025-11-05');
+const getToday = () => new Date().toISOString().split('T')[0];
+const getPastDate = (days) => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return date.toISOString().split('T')[0];
+};
+const startDate = ref(getPastDate(30)); // 기본 30일 전
+const endDate = ref(getToday()); // 오늘
 const showRiskTable = ref(false);
 
-// --- 7개 KPI 데이터를 ref로 변경 ---
+// (★신규★) API 호출 파라미터용
+const apiParams = computed(() => ({
+    startDate: startDate.value,
+    endDate: endDate.value,
+}));
+
+// --- (★수정★) 모든 데이터를 API 응답을 받을 ref로 변경 (초기값: '...') ---
 const kpiData = ref({
-    users: { value: '12,847', unit: '명' },
-    distance: { value: '45,382', unit: 'km' },
-    rides: { value: '5,650', unit: '건' },
-    risks: { value: '490', unit: '건' },
-    riskRate: { value: '8.7', unit: '%' },
-    helmetRate: { value: '91', unit: '%' },
-    safetyScore: { value: '86.5', unit: '점' },
+    users: { value: '...', unit: '명' },
+    distance: { value: '...', unit: 'km' },
+    rides: { value: '...', unit: '건' },
+    risks: { value: '...', unit: '건' },
+    riskRate: { value: '...', unit: '%' },
+    helmetRate: { value: '...', unit: '%' },
+    safetyScore: { value: '...', unit: '점' },
 });
 
-// --- KPI 데이터 조회 함수 ---
-const fetchKpiData = () => {
-    console.log('KPI 데이터 조회 시도:', startDate.value, '~', endDate.value);
-    // (임시) Mock 데이터 변경
-    kpiData.value.users.value = (12847 + Math.floor(Math.random() * 100)).toLocaleString();
-    kpiData.value.risks.value = (490 + Math.floor(Math.random() * 20 - 10)).toString();
+const kpiTrendData = ref({ labels: [], datasets: { rideCounts: [], helmetRates: [], riskCounts: [] } });
+const riskTypeData = ref([]);
+const userGroupData = ref([]); // (★수정★)
+const timeRiskData = ref({ labels: [], data: [] });
+const safetyScoreDistribution = ref({ labels: [], data: [] });
+const regionData = ref([]); // (★수정★)
+const topRegionsData = ref([]);
+
+// --- (★신규★) API 호출 함수들 ---
+
+// 7개 KPI 데이터
+const fetchKpiData = async () => {
+    try {
+        const params = apiParams.value;
+        const [kpiResponse, scoreResponse, trendResponse] = await Promise.all([
+            apiClient.get('/admin/stats/kpis', { params }),
+            apiClient.get('/admin/stats/safety-scores', { params }),
+            apiClient.get('/admin/stats/kpi-trends', { params: { ...params, interval: 'daily' } }),
+        ]);
+
+        kpiData.value.users.value = (kpiResponse.totalUserCount || 0).toLocaleString();
+        kpiData.value.distance.value = (kpiResponse.totalDistance || 0).toLocaleString();
+        kpiData.value.risks.value = (kpiResponse.totalRiskCount || 0).toLocaleString();
+        kpiData.value.helmetRate.value = (kpiResponse.helmetRate || 0).toFixed(1);
+        kpiData.value.safetyScore.value = (scoreResponse.averageScore || 0).toFixed(1);
+
+        // (누적 운행 수: kpi-trends 응답의 rideCounts 배열의 합)
+        const totalRides = trendResponse.datasets.rideCounts.reduce((a, b) => a + b, 0);
+        kpiData.value.rides.value = totalRides.toLocaleString();
+
+        // (평균 위험항목 발생율: totalRiskCount / totalRides)
+        if (totalRides > 0) {
+            kpiData.value.riskRate.value = ((kpiResponse.totalRiskCount / totalRides) * 100).toFixed(1);
+        } else {
+            kpiData.value.riskRate.value = '0';
+        }
+    } catch (error) {
+        console.error('KPI 데이터 로딩 실패:', error);
+        // 에러 시 '...' 유지
+    }
 };
 
-// --- (이하 나머지 데이터는 이전과 동일) ---
-const riskTypeData = [
-    { name: '안전모 미착용', value: 30, color: '#EF4444', count: 147 },
-    { name: '급출발', value: 18, color: '#F59E0B', count: 88 },
-    { name: '급정지', value: 20, color: '#3B82F6', count: 98 },
-    { name: '급가속', value: 15, color: '#8B5CF6', count: 74 },
-    { name: '급감속', value: 10, color: '#EC4899', count: 49 },
-    { name: '급회전', value: 7, color: '#14B8A6', count: 34 },
-];
-const kpiTrendData = [
-    { date: '11/1', 이용건수: 980, 안전모착용률: 85, 위험행동수: 28 },
-    { date: '11/2', 이용건수: 1150, 안전모착용률: 88, 위험행동수: 24 },
-    { date: '11/3', 이용건수: 1050, 안전모착용률: 91, 위험행동수: 19 },
-    { date: '11/4', 이용건수: 1280, 안전모착용률: 89, 위험행동수: 22 },
-    { date: '11/5', 이용건수: 1420, 안전모착용률: 92, 위험행동수: 18 },
-];
-const userGroupData = [
-    { group: '신규 사용자', 안전점수: 65, 위험행동빈도: 8.5 },
-    { group: '10회 이상', 안전점수: 78, 위험행동빈도: 5.2 },
-    { group: '100회 이상', 안전점수: 89, 위험행동빈도: 2.1 },
-];
-const timeRiskData = [
-    { time: '출근길(08-10)', count: 85 },
-    { time: '점심(12-14)', count: 52 },
-    { time: '퇴근길(18-20)', count: 128 },
-    { time: '심야(22-00)', count: 45 },
-];
-const safetyScoreDistribution = [
-    { range: '0-20', count: 12 },
-    { range: '21-40', count: 35 },
-    { range: '41-60', count: 89 },
-    { range: '61-80', count: 156 },
-    { range: '81-100', count: 208 },
-];
-const regionData = [
-    { region: '양호동', score: 88, trend: '+3' },
-    { region: '신평동', score: 85, trend: '+1' },
-    { region: '형곡동', score: 82, trend: '-2' },
-    { region: '진미동', score: 79, trend: '+5' },
-    { region: '공단동', score: 76, trend: '-1' },
-];
-const topRegionsData = [
-    { region: '영남대역 3번 출구', count: 58 },
-    { region: '경산시청 사거리', count: 42 },
-    { region: '백천동 상가 밀집구역', count: 31 },
-    { region: '옥곡동 네거리', count: 25 },
-    { region: '진량읍 행정복지센터 앞', count: 19 },
-];
+// KPI 트렌드 (LineChart)
+const fetchKpiTrends = async () => {
+    try {
+        const response = await apiClient.get('/admin/stats/kpi-trends', {
+            params: { ...apiParams.value, interval: 'daily' },
+        });
+        kpiTrendData.value = response;
+    } catch (error) {
+        console.error('KPI 트렌드 데이터 로딩 실패:', error);
+        kpiTrendData.value = { labels: [], datasets: { rideCounts: [], helmetRates: [], riskCounts: [] } };
+    }
+};
 
-// --- 차트 데이터 가공 (이전과 동일) ---
+// 위험 행동 유형 (PieChart)
+const riskColors = ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6'];
+const fetchRiskTypes = async () => {
+    try {
+        const response = await apiClient.get('/admin/stats/risk-types', { params: apiParams.value });
+        riskTypeData.value = response.data.map((item, index) => ({
+            name: item.kpiName,
+            value: item.percentage, // 파이 차트용 %
+            count: item.count, // 테이블용 건수
+            color: riskColors[index % riskColors.length],
+        }));
+    } catch (error) {
+        console.error('위험 행동 유형 데이터 로딩 실패:', error);
+        riskTypeData.value = [];
+    }
+};
+
+// Top 5 위험 지역 (Table)
+const fetchTopRegions = async () => {
+    try {
+        const response = await apiClient.get('/admin/stats/top-risk-regions', { params: apiParams.value });
+        topRegionsData.value = response.regions;
+    } catch (error) {
+        console.error('Top 위험 지역 데이터 로딩 실패:', error);
+        topRegionsData.value = [];
+    }
+};
+
+// 시간대별 위험도 (BarChart)
+const fetchHourlyRisk = async () => {
+    try {
+        const response = await apiClient.get('/admin/stats/hourly-risk', { params: apiParams.value });
+        timeRiskData.value = response;
+    } catch (error) {
+        console.error('시간대별 위험도 데이터 로딩 실패:', error);
+        timeRiskData.value = { labels: [], data: [] };
+    }
+};
+
+// (★신규★) 사용자 그룹별 비교 (BarChart) - v1.2 API
+const fetchUserGroupComparison = async () => {
+    try {
+        const response = await apiClient.get('/admin/stats/user-group-comparison', { params: apiParams.value });
+        userGroupData.value = response.groups; // API 응답 형식: [{ group: '...', 안전점수: 0, 위험행동빈도: 0 }]
+    } catch (error) {
+        console.error('사용자 그룹 비교 데이터 로딩 실패:', error);
+        userGroupData.value = [];
+    }
+};
+
+// (★신규★) 지역별 안전 점수 (Table) - v1.2 API
+const fetchRegionalScores = async () => {
+    try {
+        const response = await apiClient.get('/admin/stats/regional-scores', { params: apiParams.value });
+        regionData.value = response.regions; // API 응답 형식: [{ region: '...', score: 0, trend: '+0' }]
+    } catch (error) {
+        console.error('지역별 안전 점수 데이터 로딩 실패:', error);
+        regionData.value = [];
+    }
+};
+
+// 안전 점수 분포 (BarChart)
+const fetchSafetyScoreDistribution = async () => {
+    try {
+        const response = await apiClient.get('/admin/stats/safety-scores', { params: apiParams.value });
+        const labels = Object.keys(response.distribution);
+        const data = Object.values(response.distribution);
+        safetyScoreDistribution.value = { labels, data };
+    } catch (error) {
+        console.error('안전 점수 분포 데이터 로딩 실패:', error);
+        safetyScoreDistribution.value = { labels: [], data: [] };
+    }
+};
+
+// (★수정★) '조회' 버튼 클릭 시 모든 API 호출
+const fetchAllStatsData = () => {
+    fetchKpiData();
+    fetchKpiTrends();
+    fetchRiskTypes();
+    fetchTopRegions();
+    fetchHourlyRisk();
+    fetchSafetyScoreDistribution();
+    fetchUserGroupComparison(); // (★신규★) v1.2 API 호출
+    fetchRegionalScores(); // (★신규★) v1.2 API 호출
+};
+
+// --- 차트 데이터 가공 (computed) ---
+// (API 응답 ref를 사용하도록 수정)
 const kpiTrendChartData = computed(() => ({
-    labels: kpiTrendData.map((d) => d.date),
+    labels: kpiTrendData.value.labels,
     datasets: [
         {
             label: '이용건수',
-            data: kpiTrendData.map((d) => d.이용건수),
+            data: kpiTrendData.value.datasets.rideCounts,
             borderColor: '#3B82F6',
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
             fill: true,
@@ -307,7 +404,7 @@ const kpiTrendChartData = computed(() => ({
         },
         {
             label: '안전모착용률',
-            data: kpiTrendData.map((d) => d.안전모착용률),
+            data: kpiTrendData.value.datasets.helmetRates,
             borderColor: '#10B981',
             backgroundColor: 'rgba(16, 185, 129, 0.1)',
             fill: false,
@@ -316,7 +413,7 @@ const kpiTrendChartData = computed(() => ({
         },
         {
             label: '위험행동수',
-            data: kpiTrendData.map((d) => d.위험행동수),
+            data: kpiTrendData.value.datasets.riskCounts,
             borderColor: '#EF4444',
             backgroundColor: 'rgba(239, 68, 68, 0.1)',
             fill: false,
@@ -349,11 +446,11 @@ const kpiTrendChartOptions = {
     },
 };
 const riskTypeChartData = computed(() => ({
-    labels: riskTypeData.map((d) => d.name),
+    labels: riskTypeData.value.map((d) => d.name),
     datasets: [
         {
-            data: riskTypeData.map((d) => d.value),
-            backgroundColor: riskTypeData.map((d) => d.color),
+            data: riskTypeData.value.map((d) => d.value),
+            backgroundColor: riskTypeData.value.map((d) => d.color),
         },
     ],
 }));
@@ -366,11 +463,11 @@ const riskTypeChartOptions = {
     },
 };
 const timeRiskChartData = computed(() => ({
-    labels: timeRiskData.map((d) => d.time),
+    labels: timeRiskData.value.labels,
     datasets: [
         {
             label: '위험 행동 수',
-            data: timeRiskData.map((d) => d.count),
+            data: timeRiskData.value.data,
             backgroundColor: '#EF4444',
             borderRadius: 4,
         },
@@ -383,12 +480,13 @@ const timeRiskChartOptions = {
         legend: { display: false },
     },
 };
+// (★수정★) v1.2 API (userGroupData) 사용
 const userGroupChartData = computed(() => ({
-    labels: userGroupData.map((d) => d.group),
+    labels: userGroupData.value.map((d) => d.group),
     datasets: [
         {
             label: '안전점수',
-            data: userGroupData.map((d) => d.안전점수),
+            data: userGroupData.value.map((d) => d.안전점수),
             backgroundColor: '#3B82F6',
             borderRadius: 4,
         },
@@ -402,11 +500,11 @@ const userGroupChartOptions = {
     },
 };
 const safetyScoreChartData = computed(() => ({
-    labels: safetyScoreDistribution.map((d) => d.range),
+    labels: safetyScoreDistribution.value.labels,
     datasets: [
         {
             label: '사용자 수',
-            data: safetyScoreDistribution.map((d) => d.count),
+            data: safetyScoreDistribution.value.data,
             backgroundColor: '#8B5CF6',
             borderRadius: 4,
         },
@@ -419,35 +517,10 @@ const safetyScoreChartOptions = {
         legend: { display: false },
     },
 };
-const topRegionsChartData = computed(() => ({
-    labels: topRegionsData.map((d) => d.region),
-    datasets: [
-        {
-            label: '위험 발생 건수',
-            data: topRegionsData.map((d) => d.count),
-            backgroundColor: '#F97316',
-            borderRadius: 4,
-        },
-    ],
-}));
-const topRegionsChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    indexAxis: 'y',
-    plugins: {
-        legend: { display: false },
-    },
-    scales: {
-        y: {
-            ticks: {
-                font: { size: 10 },
-            },
-        },
-    },
-};
 
+// (★수정★) 마운트 시 모든 API 호출
 onMounted(() => {
-    fetchKpiData();
+    fetchAllStatsData();
 });
 </script>
 

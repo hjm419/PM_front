@@ -15,8 +15,8 @@
                     <InfoInput placeholder="사용자 ID 입력" v-model="userId" />
                 </div>
                 <div>
-                    <label class="info-label">기기 번호 (★백엔드 추가 구현 필요)</label>
-                    <InfoInput placeholder="기기 번호 입력" v-model="deviceId" />
+                    <label class="info-label">PM ID (기기 번호)</label>
+                    <InfoInput placeholder="PM ID 입력" v-model="deviceId" />
                 </div>
             </div>
             <InfoButton variant="default" style="width: 100%" @click="fetchRides(1)">
@@ -31,14 +31,19 @@
                     <tr>
                         <th class="info-table-head">운행일</th>
                         <th class="info-table-head">사용자 ID</th>
-                        <th class="info-table-head">기기 번호</th>
+                        <th class="info-table-head">PM ID</th>
                         <th class="info-table-head">시작 시간</th>
                         <th class="info-table-head">종료 시간</th>
                         <th class="info-table-head">안전 점수</th>
                     </tr>
                 </thead>
                 <tbody class="info-table-body">
-                    <tr v-if="rides.length === 0">
+                    <tr v-if="isLoading">
+                        <td colspan="6" class="info-table-cell" style="text-align: center; height: 100px">
+                            운행 기록을 불러오는 중입니다...
+                        </td>
+                    </tr>
+                    <tr v-else-if="rides.length === 0">
                         <td colspan="6" class="info-table-cell" style="text-align: center; height: 100px">
                             조회된 운행 기록이 없습니다.
                         </td>
@@ -54,7 +59,7 @@
                         <td class="info-table-cell">{{ ride.deviceId }}</td>
                         <td class="info-table-cell">{{ ride.startTime }}</td>
                         <td class="info-table-cell">{{ ride.endTime }}</td>
-                        <td class="info-table-cell">{{ ride.score }}점</td>
+                        <td class="info-table-cell">{{ ride.score }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -95,12 +100,12 @@
                             <p>{{ rideDetail.userId }}</p>
                         </div>
                         <div>
-                            <p>기기 번호 (Trip ID)</p>
+                            <p>PM ID (Ride ID)</p>
                             <p>{{ rideDetail.deviceId }}</p>
                         </div>
                         <div>
                             <p>안전 점수</p>
-                            <p>{{ rideDetail.score }}점</p>
+                            <p>{{ rideDetail.score }}</p>
                         </div>
                         <div>
                             <p>출발 시간</p>
@@ -112,7 +117,7 @@
                         </div>
                         <div>
                             <p>헬멧 착용</p>
-                            <p>{{ rideDetail.helmetOn ? '착용' : '미착용' }}</p>
+                            <p>{{ rideDetail.helmetOn ? '착용' : 'N/A' }}</p>
                         </div>
                         <div>
                             <p>위험 행동 (총)</p>
@@ -128,8 +133,8 @@
                             <thead class="info-table-header">
                                 <tr>
                                     <th class="info-table-head">발생 시간 (Timestamp)</th>
-                                    <th class="info-table-head">경도 (Longitude)</th>
-                                    <th class="info-table-head">위도 (Latitude)</th>
+                                    <th class="info-table-head">위험 항목명 (KPI)</th>
+                                    <th class="info-table-head">위치 (Location)</th>
                                 </tr>
                             </thead>
                             <tbody class="info-table-body">
@@ -140,8 +145,8 @@
                                 </tr>
                                 <tr v-for="(event, idx) in rideDetail.events" :key="idx" class="info-table-row">
                                     <td class="info-table-cell">{{ event.time }}</td>
-                                    <td class="info-table-cell">{{ event.lng }}</td>
-                                    <td class="info-table-cell">{{ event.lat }}</td>
+                                    <td class="info-table-cell">{{ event.kpiName }}</td>
+                                    <td class="info-table-cell">{{ event.locationString }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -165,7 +170,8 @@ import InfoDialog from '../ui/InfoDialog.vue';
 const startDate = ref('');
 const endDate = ref('');
 const userId = ref('');
-const deviceId = ref('');
+const deviceId = ref(''); // (API 명세서의 pmId에 해당)
+const isLoading = ref(true); // (★추가★)
 
 const rides = ref([]);
 const currentPage = ref(1);
@@ -176,54 +182,71 @@ const ridesPerPage = 10;
 const selectedRide = ref(null);
 const rideDetail = ref(null);
 
+// (★수정★) API의 Timestamp (ISO string)에서 날짜/시간 추출
 const formatDateTime = (dateTimeString) => {
-    if (!dateTimeString || dateTimeString.length < 19) {
+    if (!dateTimeString) {
         return { date: 'N/A', time: 'N/A' };
     }
-    return {
-        date: dateTimeString.substring(0, 10),
-        time: dateTimeString.substring(11, 19),
-    };
+    try {
+        const dateObj = new Date(dateTimeString);
+        if (isNaN(dateObj.getTime())) {
+            return { date: 'Invalid Date', time: 'Invalid Date' };
+        }
+        const date = dateObj.toISOString().split('T')[0];
+        const time = dateObj.toTimeString().split(' ')[0];
+        return { date, time };
+    } catch (e) {
+        return { date: 'N/A', time: 'N/A' };
+    }
 };
 
+/**
+ * (★수정★)
+ * API 경로를 '/api/admin/rides'로 변경
+ * API 명세서에 맞게 params와 데이터 매핑 수정
+ */
 const fetchRides = async (page) => {
     if (page < 1 || (page > totalPages.value && totalRides.value > 0)) {
         return;
     }
 
+    isLoading.value = true;
+
     try {
         currentPage.value = page;
+        // (★핵심 수정★) API 명세서에 맞게 startDate, endDate 파라미터 추가
         const params = {
-            currentPage: page,
-            perPage: ridesPerPage,
-            startDate: startDate.value,
-            endDate: endDate.value,
+            page: page,
+            size: ridesPerPage,
+            userId: userId.value || null, // 빈 문자열 대신 null
+            pmId: deviceId.value || null, // 빈 문자열 대신 null
+            startDate: startDate.value || null, // 날짜 필터 추가
+            endDate: endDate.value || null, // 날짜 필터 추가
         };
 
-        // (★수정★) '/api' 접두사 제거
-        const response = await apiClient.post('/trip/selectUserLogs.json', params);
+        // (★수정★) API 경로: /trip/selectUserLogs.json -> /admin/rides
+        const response = await apiClient.get('/admin/rides', { params });
 
-        totalRides.value = response.count;
+        // (★수정★) API 명세서 응답 형식에 맞춤
+        totalRides.value = response.totalCount || 0;
         totalPages.value = Math.ceil(totalRides.value / ridesPerPage) || 1;
 
-        rides.value = response.result.map((ride) => {
-            const startTime = formatDateTime(ride.trip_start_date);
-            const endTime = formatDateTime(ride.trip_end_date);
+        // (★수정★) API 명세서 필드명에 맞게 매핑
+        rides.value = response.rides.map((ride) => {
+            const startTime = formatDateTime(ride.startTime);
+            const endTime = formatDateTime(ride.endTime);
 
             return {
                 date: startTime.date,
-                userId: ride.user_id,
-                deviceId: ride.trip_id,
+                userId: ride.userId,
+                deviceId: ride.rideId, // (T_RIDE의 PK인 ride_id)
                 startTime: startTime.time,
                 endTime: endTime.time,
-                score: ride.final_score,
-                helmetOn: ride.helmet_on,
-                abruptCount:
-                    (ride.abrupt_start_count || 0) +
-                    (ride.abrupt_end_count || 0) +
-                    (ride.abrupt_accel_count || 0) +
-                    (ride.abrupt_decel_count || 0) +
-                    (ride.abrupt_noslow_count || 0),
+                score: ride.safetyScore, // (★핵심 수정★) API 명세서에 추가된 safetyScore 사용
+
+                // (★유지★) 상세 다이얼로그에서 사용할 Mock 데이터 (API에 없음)
+                helmetOn: false,
+                abruptCount: 0,
             };
         });
     } catch (error) {
@@ -231,33 +254,46 @@ const fetchRides = async (page) => {
         rides.value = [];
         totalRides.value = 0;
         totalPages.value = 1;
+    } finally {
+        isLoading.value = false;
     }
 };
 
+/**
+ * (★수정★)
+ * 상세 정보 API를 '/api/admin/rides/{rideId}/risks'로 변경
+ */
 const openRideDetail = async (ride) => {
     selectedRide.value = ride;
-    rideDetail.value = null;
+    rideDetail.value = null; // 로딩 시작
 
     try {
-        // (★수정★) '/api' 접두사 제거
-        const response = await apiClient.post('/trip/selectTripLogDetail.json', {
-            trip_id: ride.deviceId,
-        });
+        // (★핵심 수정★) API 명세서의 GET /admin/rides/{rideId}/risks 호출
+        // (기존: /api/admin/rides-logs)
+        // 파라미터가 URL 경로의 일부가 되었으므로 params 객체 제거
+        const logResponse = await apiClient.get(`/admin/rides/${ride.deviceId}/risks`);
 
-        const gpsEvents = response.map((gps) => ({
-            time: gps.timestamp,
-            lat: gps.latitude,
-            lng: gps.longitude,
+        // (★신규★) API 응답(log.location)을 프론트엔드 형식으로 매핑
+        const gpsEvents = logResponse.logs.map((log) => ({
+            time: formatDateTime(log.timestamp).time,
+            kpiName: log.kpiName,
+            // (GeoPoint가 {lat, lng} 객체라고 가정)
+            locationString: log.location ? `${log.location.lat}, ${log.location.lng}` : 'N/A',
         }));
 
+        // (★수정★) 목록 데이터(ride)와 API 데이터(gpsEvents)를 조합
         rideDetail.value = {
             ...ride,
             events: gpsEvents,
         };
     } catch (error) {
-        console.error('운행 상세 정보 조회 실패:', error);
-        alert('상세 정보 로딩에 실패했습니다.');
-        selectedRide.value = null;
+        console.error('운행 상세 로그 조회 실패:', error);
+        // (★수정★) 로그 조회에 실패해도, 기본 정보는 표시
+        rideDetail.value = {
+            ...ride,
+            events: [], // 이벤트는 빈 배열로
+        };
+        alert('상세 운행 로그(GPS) 로딩에 실패했습니다. 기본 정보만 표시됩니다.');
     }
 };
 

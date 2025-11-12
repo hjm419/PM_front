@@ -140,17 +140,19 @@ const saveProfile = async () => {
             // (참고: login_id는 변경하지 않음)
         };
 
-        // (★수정★) 백엔드 API 경로(/api/users/:id)와 일치시킴
-        // PM_back/src/api/user.routes.js -> router.put("/:id", ...)
-        // PM_back/src/services/user.service.js -> updateUser (현재 TODO)
-        const response = await apiClient.put(`/users/${loggedInUser.value.user_id}`, params);
+        // (★핵심 수정★) API 명세서의 'PUT /api/auth/me' 경로를 사용하도록 변경
+        const response = await apiClient.put(`/auth/me`, params);
 
         // (참고: 백엔드 service가 "TODO"이므로, 지금은 성공 알림만 띄웁니다)
-        alert('프로필이 성공적으로 저장되었습니다. (백엔드 updateUser 로직 구현 필요)');
+        alert('프로필이 성공적으로 저장되었습니다.');
 
         // (★추가★) 변경된 정보를 localStorage에도 업데이트
-        const updatedUser = { ...loggedInUser.value, ...params };
+        // (API 응답(response)에 수정된 user 객체가 온다고 가정)
+        const updatedUser = { ...loggedInUser.value, ...response };
         localStorage.setItem('user', JSON.stringify(updatedUser));
+
+        // 폼 데이터 다시 로드 (API 응답 기준으로)
+        loadProfileFromStorage();
     } catch (error) {
         console.error('프로필 저장 실패:', error);
         alert('프로필 저장 중 오류가 발생했습니다.');
@@ -171,24 +173,18 @@ const changePassword = async () => {
     }
 
     try {
-        // (★참고★)
-        // PM_back 폴더에는 비밀번호 변경 API가 없습니다. (/auth/logout만 추가함)
-        // '/api/auth/change-password' 같은 엔드포인트를 백엔드에 구현해야 합니다.
-        alert('비밀번호 변경 API가 백엔드에 구현되어 있지 않습니다. (TODO)');
+        // (★핵심 수정★) API 명세서의 'PUT /api/auth/password' 경로를 사용
 
-        // --- 아래는 백엔드 구현 후 사용할 코드 예시 ---
-        /*
         const params = {
-            old_pw: passwordData.value.currentPw,
-            new_pw: passwordData.value.newPw,
+            currentPassword: passwordData.value.currentPw,
+            newPassword: passwordData.value.newPw,
         };
-        // (예시 API) /api/users/me/password
-        await apiClient.put(`/users/me/password`, params);
-        
+
+        await apiClient.put(`/auth/password`, params);
+
         alert('비밀번호가 변경되었습니다. 다시 로그인해주세요.');
         localStorage.clear();
         window.location.href = '/login';
-        */
     } catch (error) {
         console.error('비밀번호 변경 실패:', error);
         alert('비밀번호 변경 중 오류가 발생했습니다. (현재 비밀번호가 틀렸거나 오류 발생)');
