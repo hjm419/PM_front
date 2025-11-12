@@ -29,27 +29,37 @@ const isListOpen = ref(true);
 
 onMounted(async () => {
     try {
-        const params = {
-            currentPage: 1,
-            perPage: 50,
-        };
-        // (★수정★) '/api' 접두사 제거
-        const response = await apiClient.post('/trip/selectLogs.json', params);
+        // (★수정★)
+        // API 경로: /api/kickboards -> /api/admin/kickboards
+        // API 명세서의 Query Params (page, size, status 등)를 사용할 수 있으나,
+        // 여기서는 모든 킥보드를 가져오기 위해 param 없이 호출합니다.
+        const response = await apiClient.get('/admin/kickboards');
 
-        const mappedUsers = response.map((user) => {
+        // (★수정★)
+        // API 명세서 응답(response.kickboards)을 프론트엔드 'users' prop 형식으로 매핑합니다.
+        const mappedUsers = response.kickboards.map((kickboard) => {
+            // API 응답의 location 객체 (예: { lat: 37.5, lng: 127.5 }) 또는
+            // DB 스키마의 GeoPoint를 파싱해야 함 (여기서는 객체로 가정)
+            const lat = kickboard.location?.lat || 35.8244; // 기본 위도
+            const lng = kickboard.location?.lng || 128.738; // 기본 경도
+
             return {
-                id: user.user_id,
-                score: user.final_score,
-                lat: user.trip_latitude,
-                lng: user.trip_longitude,
-                startTime: user.trip_start_date,
-                endTime: user.trip_end_date,
+                // UserList.vue용 필드
+                id: kickboard.pmId, // (pmId)
+                startTime: kickboard.pmStatus, // (pmStatus)
+                endTime: '', // 사용하지 않음
+
+                // RealtimeMap.vue + UserList.vue 공용 필드
+                score: kickboard.battery, // (battery)
+                lat: lat,
+                lng: lng,
             };
         });
 
         users.value = mappedUsers;
     } catch (error) {
         console.error('실시간 데이터 로딩 실패:', error);
+        users.value = []; // 실패 시 빈 배열로 설정
     }
 });
 </script>

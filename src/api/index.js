@@ -38,7 +38,7 @@ apiClient.interceptors.request.use(
 // (기존) API 응답 가로채기 (Response Interceptor)
 apiClient.interceptors.response.use(
     (response) => {
-        // ⬇️ (수정) 백엔드의 apiResponse 형식을 존중
+        // ⬇️ (수정) 백엔드의 apiResponse 형식을 존중 (PM_back-main - 복사본/src/utils/apiResponse.js)
         if (response.data && response.data.success === true && response.data.data !== undefined) {
             // ⬇️ (수정) 'result' 대신 'data'를 반환
             return response.data.data;
@@ -49,7 +49,7 @@ apiClient.interceptors.response.use(
             return Promise.reject(new Error(response.data.message || 'API Error'));
         }
 
-        // { result: ... } 형태가 (혹시) 섞여있다면 처리
+        // (수정) 기존 프론트엔드용 응답 형식도 호환
         if (response.data && response.data.result !== undefined) {
             return response.data.result;
         }
@@ -59,6 +59,14 @@ apiClient.interceptors.response.use(
     },
     (error) => {
         // HTTP 상태 코드가 2xx가 아닌 경우 (401, 404, 500 등)
+
+        // (★신규★) 401 (Unauthorized) 에러인 경우, 토큰이 만료되었거나 유효하지 않음
+        if (error.response && error.response.status === 401) {
+            alert('세션이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.');
+            localStorage.removeItem('user'); // 로컬 저장소의 사용자 정보 삭제
+            window.location.href = '/login'; // 로그인 페이지로 강제 이동
+        }
+
         return Promise.reject(error);
     }
 );

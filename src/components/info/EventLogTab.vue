@@ -32,12 +32,17 @@
                     </tr>
                 </thead>
                 <tbody class="info-table-body">
-                    <tr v-if="logs.length === 0">
+                    <tr v-if="isLoading">
+                        <td colspan="5" class="info-table-cell" style="text-align: center; height: 100px">
+                            이벤트 로그를 불러오는 중입니다...
+                        </td>
+                    </tr>
+                    <tr v-else-if="logs.length === 0">
                         <td colspan="5" class="info-table-cell" style="text-align: center; height: 100px">
                             조회된 이벤트 로그가 없습니다.
                         </td>
                     </tr>
-                    <tr v-for="(log, idx) in logs" :key="idx" class="info-table-row">
+                    <tr v-else v-for="(log, idx) in logs" :key="idx" class="info-table-row">
                         <td class="info-table-cell">{{ log.time }}</td>
                         <td class="info-table-cell">
                             <InfoBadge :variant="getEventTypeVariant(log.type)">{{ log.type }}</InfoBadge>
@@ -91,99 +96,81 @@ const eventType = ref('전체');
 
 const eventOptions = [
     { value: '전체', label: '전체' },
-    { value: '사고', label: '사고' },
-    { value: '위험 행동', label: '위험 행동' },
-    { value: '날씨', label: '날씨' },
-    { value: '기기 고장', label: '기기 고장' },
+    { value: '사고', label: '사고' }, // (API 명세서에 따름)
+    { value: '위험 행동', label: '위험 행동' }, // (API 명세서에 따름)
+    { value: '기기 고장', label: '기기 고장' }, // (API 명세서에 따름)
+    { value: '시스템', label: '시스템' }, // (API 명세서에 따름)
 ];
 
 // --- 목록 데이터 ---
+const isLoading = ref(true); // (★추가★)
 const logs = ref([]); // 테이블에 표시될 목록
 const currentPage = ref(1);
 const totalPages = ref(1);
 const totalLogs = ref(0);
 const logsPerPage = 10;
 
-// (★유지★) 백엔드 API가 없으므로 Mock 데이터를 유지합니다.
-const mockEventLogs = [
-    { time: '2024-11-05 14:32', type: '위험 행동', detail: '헬멧 미착용 감지', userId: 'U003', deviceId: 'D-2024-004' },
-    { time: '2024-11-05 13:15', type: '사고', detail: '낙상 사고 발생', userId: 'U005', deviceId: 'D-2024-007' },
-    { time: '2024-11-05 11:20', type: '기기 고장', detail: '배터리 이상 감지', userId: '-', deviceId: 'D-2024-003' },
-    {
-        time: '2024-11-05 10:05',
-        type: '위험 행동',
-        detail: '과속 감지 (28km/h)',
-        userId: 'U002',
-        deviceId: 'D-2024-002',
-    },
-    { time: '2024-11-05 09:30', type: '날씨', detail: '강우 경보 발령', userId: '-', deviceId: '-' },
-    { time: '2024-11-04 18:45', type: '위험 행동', detail: '급가속 감지', userId: 'U001', deviceId: 'D-2024-001' },
-    {
-        time: '2024-11-04 16:22',
-        type: '기기 고장',
-        detail: '브레이크 고장 신고',
-        userId: 'U004',
-        deviceId: 'D-2024-006',
-    },
-];
+// (★제거★) Mock 데이터 제거
+// const mockEventLogs = [ ... ];
+
+// (★신규★) 날짜 포맷팅 헬퍼 (RideHistoryTab에서 가져옴)
+const formatDateTime = (dateTimeString) => {
+    if (!dateTimeString) return 'N/A';
+    try {
+        const dateObj = new Date(dateTimeString);
+        if (isNaN(dateObj.getTime())) return 'Invalid Date';
+        // 'YYYY-MM-DD HH:MM:SS' 형식으로 반환
+        const date = dateObj.toISOString().split('T')[0];
+        const time = dateObj.toTimeString().split(' ')[0];
+        return `${date} ${time}`;
+    } catch (e) {
+        return 'N/A';
+    }
+};
 
 /**
- * (★추가★)
- * 이벤트 로그를 서버에서 조회하는 함수 (검색 및 페이징)
+ * (★수정★)
+ * Mock 데이터 대신 API 명세서 7번 'GET /api/admin/events'를 호출합니다.
  */
 const fetchEvents = async (page) => {
     if (page < 1 || (page > totalPages.value && totalLogs.value > 0)) {
         return;
     }
 
+    isLoading.value = true;
     currentPage.value = page;
 
-    // (★참고★)
-    // 아래는 백엔드 API가 준비되었을 때 사용할 API 호출 코드 예시입니다.
-    // 현재는 주석 처리하고 Mock 데이터를 대신 사용합니다.
-
-    /*
     try {
         const params = {
-            currentPage: page,
-            perPage: logsPerPage,
-            startDate: startDate.value,
-            endDate: endDate.value,
-            eventType: eventType.value === '전체' ? '' : eventType.value,
+            page: page,
+            size: logsPerPage,
+            startDate: startDate.value || null,
+            endDate: endDate.value || null,
+            eventType: eventType.value === '전체' ? null : eventType.value,
         };
 
-        // Spring API 호출 (예: /api/events/selectList.json)
-        // const response = await apiClient.post('/api/events/selectList.json', params);
+        // (★수정★) API 호출
+        const response = await apiClient.get('/admin/events', { params });
 
-        // totalLogs.value = response.count;
-        // totalPages.value = Math.ceil(totalLogs.value / logsPerPage) || 1;
-        // logs.value = response.result; // (API 응답 형식을 프론트엔드에 맞게 매핑)
+        totalLogs.value = response.totalCount || 0;
+        totalPages.value = Math.ceil(totalLogs.value / logsPerPage) || 1;
 
+        // (★수정★) API 응답 매핑
+        logs.value = response.logs.map((log) => ({
+            time: formatDateTime(log.timestamp),
+            type: log.type,
+            detail: log.detail,
+            userId: log.relatedUserId || '-', // API 명세서 필드(relatedUserId)
+            deviceId: log.relatedPmId || '-', // API 명세서 필드(relatedPmId)
+        }));
     } catch (error) {
-        console.error("이벤트 로그 조회 실패:", error);
+        console.error('이벤트 로그 조회 실패:', error);
         logs.value = [];
         totalLogs.value = 0;
         totalPages.value = 1;
+    } finally {
+        isLoading.value = false;
     }
-    */
-
-    // (★임시★) Mock 데이터를 사용하여 페이징 흉내내기
-    console.log('API 호출 시도 (현재 Mock 사용):', {
-        page,
-        startDate: startDate.value,
-        endDate: endDate.value,
-        eventType: eventType.value,
-    });
-    const filtered = mockEventLogs.filter((log) => {
-        const matchType = eventType.value === '전체' || log.type === eventType.value;
-        // (날짜 필터링은 생략)
-        return matchType;
-    });
-
-    totalLogs.value = filtered.length;
-    totalPages.value = Math.ceil(totalLogs.value / logsPerPage) || 1;
-    const start = (page - 1) * logsPerPage;
-    logs.value = filtered.slice(start, start + logsPerPage);
 };
 
 // (기존) 이벤트 유형에 따른 뱃지 색상
@@ -195,7 +182,7 @@ const getEventTypeVariant = (type) => {
             return 'default';
         case '기기 고장':
             return 'secondary';
-        case '날씨':
+        case '시스템': // (API 명세서에 맞게 '날씨' -> '시스템' 또는 'outline' 타입 추가)
             return 'outline';
         default:
             return 'default';

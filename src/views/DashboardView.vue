@@ -42,7 +42,7 @@ import MapInfo from '@/components/MapInfo.vue';
 import ChartCard from '@/components/ChartCard.vue';
 import UserAnalysis from '@/components/UserAnalysis.vue';
 
-// 1. KPI 데이터
+// 1. KPI 데이터 (초기값)
 const kpiData = ref([
     { id: 1, value: '...', label: '누적 이용자 수', changeText: '로딩 중...' },
     { id: 2, value: '...', label: '발생 위험 행동 수', changeText: '로딩 중...' },
@@ -50,7 +50,7 @@ const kpiData = ref([
     { id: 4, value: '...', label: '운행거리 합계', changeText: '로딩 중...' },
 ]);
 
-// 2. 차트 데이터
+// 2. 차트 데이터 (초기값)
 const chartData = ref({
     helmet: { title: '월별 평균 안전 점수', data: null },
     road: { title: '시간대별 총 위험 행동', data: null, options: {} },
@@ -68,22 +68,24 @@ const pmStats = ref({ total: 3, running: 1, error: 1, lowBattery: 1 });
 
 // 1. KPI 데이터 로드
 const fetchKpiData = async () => {
+    /* (★수정★)
+     * 새 API 명세서의 'GET /api/admin/stats/kpis'를 호출합니다.
+     */
     try {
-        // (★수정★) '/api' 접두사 제거
-        const response = await apiClient.post('/trip/selectAvgStats.json', {});
+        // (참고: API 명세서에 날짜 파라미터가 있으나, 대시보드는 전체 기간으로 가정)
+        const stats = await apiClient.get('/admin/stats/kpis');
 
-        if (response) {
-            const stats = response;
+        if (stats) {
             kpiData.value = [
-                { id: 1, value: `${stats.total_user_count || 0}명`, label: '누적 이용자 수', changeText: '전체 기간' },
+                { id: 1, value: `${stats.totalUserCount || 0}명`, label: '누적 이용자 수', changeText: '전체 기간' },
                 {
                     id: 2,
-                    value: `${stats.total_abrupt_count || 0}건`,
+                    value: `${stats.totalRiskCount || 0}건`,
                     label: '발생 위험 행동 수',
                     changeText: '전체 기간',
                 },
-                { id: 3, value: `${stats.avg_helmet_on || 0}%`, label: '안전모 착용률', changeText: '평균' },
-                { id: 4, value: `${stats.total_distance || 0}km`, label: '운행거리 합계', changeText: '전체 기간' },
+                { id: 3, value: `${stats.helmetRate || 0}%`, label: '안전모 착용률', changeText: '평균' },
+                { id: 4, value: `${stats.totalDistance || 0}km`, label: '운행거리 합계', changeText: '전체 기간' },
             ];
         }
     } catch (error) {
@@ -94,47 +96,46 @@ const fetchKpiData = async () => {
 
 // 2. 차트 데이터 로드
 const fetchChartData = async () => {
+    /* (★수정★)
+     * 새 API 명세서 v1.2에 맞는 API를 호출합니다.
+     */
     try {
-        // (★수정★) '/api' 접두사 제거
-        const scoreResponse = await apiClient.post('/trip/selectMonthlyAvgScore.json');
+        // (1) '월별 평균 안전 점수' (LineChart)
+        // (★수정★) v1.2 명세서의 'GET /api/admin/stats/monthly-safety-scores' 호출
+        const scoreResponse = await apiClient.get('/admin/stats/monthly-safety-scores', {
+            // (참고: 필요 시 params로 날짜 범위 전송)
+        });
 
-        if (scoreResponse) {
+        if (scoreResponse && scoreResponse.labels && scoreResponse.data) {
             chartData.value.helmet.data = {
-                labels: scoreResponse.map((item) => item.month),
+                labels: scoreResponse.labels,
                 datasets: [
                     {
-                        data: scoreResponse.map((item) => item.avg_score),
+                        data: scoreResponse.data,
                     },
                 ],
             };
         }
 
-        // (★추가★) 차트 2: 시간대별 위험 통계 (기존 '도로 준수율' 대체)
-        // TripController.java -> selectTripHourlyStats()
-        const hourlyResponse = await apiClient.post('/trip/selectTripHour.json', {});
+        // (2) '시간대별 총 위험 행동' (LineChart)
+        // (참고: `GET /api/admin/stats/hourly-risk` API를 호출합니다.)
+        const hourlyResponse = await apiClient.get('/admin/stats/hourly-risk');
 
-        if (hourlyResponse) {
-            const hours = Array.from({ length: 24 }, (_, i) => i);
-            const abruptCounts = Array(24).fill(0);
-
-            hourlyResponse.forEach((item) => {
-                abruptCounts[item.trip_hour] = item.total_abrupt_count;
-            });
-
+        if (hourlyResponse && hourlyResponse.labels && hourlyResponse.data) {
             chartData.value.road.data = {
-                labels: hours.map((h) => `${h}시`),
+                labels: hourlyResponse.labels,
                 datasets: [
                     {
-                        data: abruptCounts,
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                        borderColor: '#ef4444',
-                        fill: true,
+                        data: hourlyResponse.data,
+                        // (LineChart.vue 기본 옵션이 파란색 영역형 차트임)
                     },
                 ],
             };
         }
     } catch (error) {
         console.error('차트 데이터 로딩 실패:', error);
+        chartData.value.helmet.data = null;
+        chartData.value.road.data = null;
     }
 };
 

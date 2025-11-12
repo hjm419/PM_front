@@ -12,14 +12,19 @@
                 <thead class="info-table-header">
                     <tr>
                         <th class="info-table-head">사용자 ID</th>
-                        <th class="info-table-head">이름</th>
+                        <th class="info-table-head">이름 (닉네임)</th>
                         <th class="info-table-head">가입일</th>
                         <th class="info-table-head">평균 안전 점수</th>
                         <th class="info-table-head">상태</th>
                     </tr>
                 </thead>
                 <tbody class="info-table-body">
-                    <tr v-if="users.length === 0">
+                    <tr v-if="isLoading">
+                        <td colspan="5" class="info-table-cell" style="text-align: center; height: 100px">
+                            사용자 목록을 불러오는 중입니다...
+                        </td>
+                    </tr>
+                    <tr v-else-if="!users || users.length === 0">
                         <td colspan="5" class="info-table-cell" style="text-align: center; height: 100px">
                             조회된 사용자가 없습니다.
                         </td>
@@ -75,7 +80,7 @@
                             <p>{{ userDetail.id }}</p>
                         </div>
                         <div>
-                            <p>이름</p>
+                            <p>이름 (닉네임)</p>
                             <p>{{ userDetail.name }}</p>
                         </div>
                         <div>
@@ -139,7 +144,6 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-// (★수정★) apiClient와 컴포넌트 import 경로 수정
 import apiClient from '@/api/index.js';
 import InfoInput from '../ui/InfoInput.vue';
 import InfoButton from '../ui/InfoButton.vue';
@@ -147,87 +151,79 @@ import InfoBadge from '../ui/InfoBadge.vue';
 import InfoDialog from '../ui/InfoDialog.vue';
 
 const searchTerm = ref('');
-const selectedUser = ref(null); // 다이얼로그 열림/닫힘 상태
-const userDetail = ref(null); // 다이얼로그에 표시될 상세 데이터
+const selectedUser = ref(null);
+const userDetail = ref(null);
+const isLoading = ref(true);
 
-// (★추가★) API에서 받아올 사용자 목록
 const users = ref([]);
 
-// (★추가★) 페이지네이션 상태
 const currentPage = ref(1);
 const totalPages = ref(1);
 const totalUsers = ref(0);
-const usersPerPage = 10; // 페이지 당 10개씩
+const usersPerPage = 10;
 
-// (★삭제★) Mock 데이터 제거
-// const mockUsers = [...];
-// const mockUserDetail = { ... };
+const formatJoinDate = (dateTimeString) => {
+    if (!dateTimeString) return 'N/A';
+    try {
+        const dateObj = new Date(dateTimeString);
+        if (isNaN(dateObj.getTime())) return 'Invalid Date';
+        return dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+    } catch (e) {
+        return 'N/A';
+    }
+};
 
-/**
- * (★추가★)
- * 사용자 목록을 서버에서 조회하는 함수 (검색 및 페이징)
- */
 const fetchUsers = async (page) => {
     if (page < 1 || (page > totalPages.value && totalUsers.value > 0)) {
-        return; // 유효하지 않은 페이지 요청 방지
+        return;
     }
+
+    isLoading.value = true;
 
     try {
         currentPage.value = page;
         const params = {
-            currentPage: page,
-            perPage: usersPerPage,
-            // (참고) user-SQL.xml에서 searchType: 'all'을 지원합니다.
-            searchType: 'all',
-            searchText: searchTerm.value,
+            page: page,
+            size: usersPerPage,
+            searchKeyword: searchTerm.value,
         };
 
-        // Spring API 호출 (UserController -> /userSelectList.json)
-        const response = await apiClient.post('/userSelectList.json', params);
+        const response = await apiClient.get('/admin/users', { params });
 
-        totalUsers.value = response.userSelectListCount;
+        totalUsers.value = response.totalCount || 0;
         totalPages.value = Math.ceil(totalUsers.value / usersPerPage) || 1;
 
-        // (★수정★) 백엔드 데이터를 프론트엔드 형식으로 매핑
-        users.value = response.userSelectList.map((user) => ({
-            id: user.user_id,
-            name: user.user_name,
-            joinDate: user.reg_dt ? user.reg_dt.split(' ')[0] : 'N/A', // 날짜 부분만 추출
-            // (★참고★) 'safetyScore'는 userSelectList 쿼리에 없으므로 임시 값 사용
-            safetyScore: 99,
-            // (★참고★) 'status'는 user.user_auth 값을 기반으로 임시 처리
-            status: user.user_auth === 'admin' ? '관리자' : '정상',
+        users.value = response.users.map((user) => ({
+            id: user.userId,
+            name: user.nickname,
+            joinDate: formatJoinDate(user.joinDate),
+            safetyScore: user.safetyScore,
+            status: user.status,
         }));
     } catch (error) {
         console.error('사용자 목록 조회 실패:', error);
         users.value = [];
         totalUsers.value = 0;
         totalPages.value = 1;
+    } finally {
+        isLoading.value = false;
     }
 };
 
-/**
- * (★추가★)
- * 사용자 상세 정보를 조회하고 다이얼로그를 여는 함수
- */
 const openUserDetail = async (user) => {
-    selectedUser.value = user; // 다이얼로그 먼저 열기 (로딩 표시)
-    userDetail.value = null; // 이전 데이터 초기화
+    selectedUser.value = user;
+    userDetail.value = null;
 
     try {
-        // Spring API 호출 (UserController -> /userSelectOne.json)
-        const response = await apiClient.post('/userSelectOne.json', { user_id: user.id });
-        const detail = response.result;
+        const detail = await apiClient.get(`/admin/users/${user.id}`);
 
-        // (★수정★) 백엔드 데이터(detail)와 목록 데이터(user)를 조합
         userDetail.value = {
-            id: detail.user_id,
-            name: detail.user_name,
-            phone: detail.user_telno,
-            joinDate: user.joinDate, // 목록에 있던 가입일 사용
+            id: detail.userId,
+            name: detail.nickname,
+            phone: detail.telno || 'N/A',
+            joinDate: formatJoinDate(detail.joinDate),
 
-            // (★참고★) 아래 3개 항목은 /userSelectOne.json API에 없으므로 Mock 데이터 사용
-            // (추후 백엔드 구현 필요)
+            // (★유지★) Mock Data (API 명세서에 없는 정보)
             totalRides: 156,
             totalPayment: '₩234,500',
             riskHistory: [
@@ -238,20 +234,17 @@ const openUserDetail = async (user) => {
     } catch (error) {
         console.error('사용자 상세 정보 조회 실패:', error);
         alert('상세 정보 로딩에 실패했습니다.');
-        selectedUser.value = null; // 오류 발생 시 다이얼로그 닫기
+        selectedUser.value = null;
     }
 };
 
-/**
- * (★추가★)
- * 다이얼로그를 닫는 함수
- */
 const closeDialog = () => {
     selectedUser.value = null;
     userDetail.value = null;
 };
 
-// 컴포넌트가 마운트될 때 첫 페이지 조회
+// --- (★제거★) v1.2 명세서에 따라 handleWarnUser, handlePenalizeUser, handleSuspendUser 함수 3개 모두 제거 ---
+
 onMounted(() => {
     fetchUsers(1);
 });
