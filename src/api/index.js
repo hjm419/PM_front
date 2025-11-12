@@ -10,7 +10,32 @@ const apiClient = axios.create({
     },
 });
 
-// (인터셉터 수정)
+// (★추가★) API 요청 가로채기 (Request Interceptor)
+apiClient.interceptors.request.use(
+    (config) => {
+        // 로그인 요청(/auth/login)이나 회원가입 요청(/auth/register)이 아닌 경우
+        if (config.url !== '/auth/login' && config.url !== '/auth/register') {
+            // localStorage에서 'user' 객체를 가져옴
+            const userString = localStorage.getItem('user');
+
+            if (userString) {
+                const user = JSON.parse(userString);
+                const token = user?.token;
+
+                // 토큰이 있으면 Authorization 헤더에 추가
+                if (token) {
+                    config.headers.Authorization = `Bearer ${token}`;
+                }
+            }
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+// (기존) API 응답 가로채기 (Response Interceptor)
 apiClient.interceptors.response.use(
     (response) => {
         // ⬇️ (수정) 백엔드의 apiResponse 형식을 존중

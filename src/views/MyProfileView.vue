@@ -176,7 +176,9 @@ const passwordData = ref({
  */
 const loadProfileFromStorage = () => {
     const user = getLoggedInUser();
-    if (!user) {
+
+    // (★수정★) 로그인 정보가 없으면 알림창 띄우고 돌려보냄
+    if (!user || !user.user_id) {
         alert('로그인 정보가 없습니다. 다시 로그인해주세요.');
         localStorage.clear();
         window.location.href = '/login';
@@ -193,7 +195,7 @@ const loadProfileFromStorage = () => {
 };
 
 /**
- * '변경사항 저장' 버튼 클릭 시
+ * '변경사항 저장' 버튼 클릭 시 (★기능 활성화★)
  */
 const saveProfile = async () => {
     if (!loggedInUser.value) {
@@ -203,22 +205,20 @@ const saveProfile = async () => {
 
     try {
         const params = {
-            // 바뀔 수 있는 정보만 전송
+            // t_user 스키마에 맞는 컬럼명으로 전송
             user_name: profileData.value.user_name,
             telno: profileData.value.telno,
-            // (참고: login_id는 변경하지 않음)
         };
 
-        // (★수정★) 백엔드 API 경로(/api/users/:id)와 일치시킴
-        // PM_back/src/api/user.routes.js -> router.put("/:id", ...)
-        // PM_back/src/services/user.service.js -> updateUser (현재 TODO)
-        const response = await apiClient.put(`/users/${loggedInUser.value.user_id}`, params);
+        // (★수정★) 요청하신 /api/users/me 경로로 PUT 요청
+        // (api/index.js의 Interceptor가 토큰을 자동으로 헤더에 추가해줍니다.)
+        const response = await apiClient.put('/users/me', params);
 
-        // (참고: 백엔드 service가 "TODO"이므로, 지금은 성공 알림만 띄웁니다)
-        alert('프로필이 성공적으로 저장되었습니다. (백엔드 updateUser 로직 구현 필요)');
+        alert('프로필이 성공적으로 저장되었습니다.');
 
         // (★추가★) 변경된 정보를 localStorage에도 업데이트
-        const updatedUser = { ...loggedInUser.value, ...params };
+        // (백엔드 /users/me가 수정한 user 객체를 반환한다고 가정)
+        const updatedUser = { ...loggedInUser.value, ...response };
         localStorage.setItem('user', JSON.stringify(updatedUser));
     } catch (error) {
         console.error('프로필 저장 실패:', error);
