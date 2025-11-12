@@ -45,12 +45,12 @@ const userLogin = async () => {
     try {
         // 1. (수정됨) auth.service.js가 반환한 { token, user } 객체가 loginResult가 됨
         const loginResult = await apiClient.post('/auth/login', {
-            login_id: loginData.value.login_id,
-            user_pw: loginData.value.user_pw,
+            adminLoginId: loginData.value.login_id,
+            password: loginData.value.user_pw,
         });
 
         // 2. (수정됨) loginResult.user 객체와 user_id가 있는지 확인
-        if (loginResult && loginResult.user && loginResult.user.user_id) {
+        if (loginResult && loginResult.user && loginResult.user.userId) {
             // 3. (핵심 수정)
             // MyProfileView, Sidebar와 일치하도록 'localStorage'에
             // 'user' 객체 전체를 JSON 문자열로 저장합니다.
