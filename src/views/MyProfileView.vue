@@ -29,8 +29,6 @@
                             required
                         />
                     </div>
-                    <!-- (참고) '이메일' 필드는 t_user 스키마에 없으므로 제거했습니다. -->
-
                     <button type="submit" class="profile-button">변경사항 저장</button>
                 </form>
             </div>
@@ -65,74 +63,6 @@
                     <button type="submit" class="profile-button">비밀번호 변경</button>
                 </form>
             </div>
-
-            <div class="profile-card full-width">
-                <h3 class="card-title">내 활동 로그 (★Mock Data)</h3>
-                <!-- 내 활동 로그 템플릿은 제공된 코드와 동일하게 유지 -->
-                <div class="log-filter-form">
-                    <div class="log-filter-grid">
-                        <div>
-                            <label class="profile-label">시작일</label>
-                            <InfoInput type="date" v-model="startDate" />
-                        </div>
-                        <div>
-                            <label class="profile-label">종료일</label>
-                            <InfoInput type="date" v-model="endDate" />
-                        </div>
-                        <div>
-                            <label class="profile-label">검색어</label>
-                            <InfoInput placeholder="상세 내용으로 검색" v-model="logSearchTerm" />
-                        </div>
-                    </div>
-                    <InfoButton variant="default" @click="handleLogSearch">
-                        <template #icon><v-icon name="bi-search" class="icon" /></template>
-                        로그 검색
-                    </InfoButton>
-                </div>
-                <div class="profile-table-wrapper">
-                    <table class="profile-table">
-                        <thead class="profile-table-header">
-                            <tr>
-                                <th class="profile-table-head">시간</th>
-                                <th class="profile-table-head">작업 유형</th>
-                                <th class="profile-table-head">상세 내용</th>
-                            </tr>
-                        </thead>
-                        <tbody class="profile-table-body">
-                            <tr v-if="logs.length === 0">
-                                <td colspan="3" class="profile-table-cell text-center">조회된 로그가 없습니다.</td>
-                            </tr>
-                            <tr v-for="(log, idx) in logs" :key="idx" class="profile-table-row">
-                                <td class="profile-table-cell">{{ log.time }}</td>
-                                <td class="profile-table-cell">{{ log.type }}</td>
-                                <td class="profile-table-cell">{{ log.detail }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="pagination-controls">
-                    <p>총 {{ totalLogs }}개의 로그</p>
-                    <div class="pagination-buttons">
-                        <InfoButton
-                            variant="outline"
-                            size="sm"
-                            @click="fetchLogs(currentPage - 1)"
-                            :disabled="currentPage === 1"
-                        >
-                            이전
-                        </InfoButton>
-                        <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
-                        <InfoButton
-                            variant="outline"
-                            size="sm"
-                            @click="fetchLogs(currentPage + 1)"
-                            :disabled="currentPage === totalPages"
-                        >
-                            다음
-                        </InfoButton>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </template>
@@ -140,8 +70,9 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import apiClient from '@/api/index.js';
-import InfoInput from '@/components/ui/InfoInput.vue';
-import InfoButton from '@/components/ui/InfoButton.vue';
+// (★제거됨★) '내 활동 로그'에서만 사용하던 InfoInput, InfoButton import가 삭제되었습니다.
+// import InfoInput from '@/components/ui/InfoInput.vue';
+// import InfoButton from '@/components/ui/InfoButton.vue';
 
 // --- 1. (★핵심 수정★) 로그인한 사용자 '객체' 가져오기 ---
 const loggedInUser = ref(null);
@@ -264,46 +195,15 @@ const changePassword = async () => {
     }
 };
 
-// --- 4. 내 활동 로그 (Mock Data 유지) ---
-const startDate = ref('');
-const endDate = ref('');
-const logSearchTerm = ref('');
-const currentPage = ref(1);
-const totalPages = ref(1);
-const totalLogs = ref(0);
-const logsPerPage = 10;
-const logs = ref([]);
-
-const allMockLogs = [
-    { time: '2025-11-06 14:30', type: '로그인', detail: '시스템 로그인' },
-    { time: '2025-11-06 11:15', type: '정보 조회', detail: '사용자 U003 정보 조회' },
-    { time: '2025-11-06 09:45', type: '계정 관리', detail: '본인 프로필 정보 업데이트' },
-];
-
-const fetchLogs = (page) => {
-    if (page < 1 || (page > totalPages.value && totalPages.value > 0)) {
-        return;
-    }
-
-    const filteredLogs = allMockLogs.filter((log) => {
-        return !logSearchTerm.value || log.detail.toLowerCase().includes(logSearchTerm.value.toLowerCase());
-    });
-
-    totalLogs.value = filteredLogs.length;
-    totalPages.value = Math.ceil(filteredLogs.length / logsPerPage) || 1;
-    const startIndex = (page - 1) * logsPerPage;
-    logs.value = filteredLogs.slice(startIndex, startIndex + logsPerPage);
-    currentPage.value = page;
-};
-
-const handleLogSearch = () => {
-    fetchLogs(1); // 1페이지로 리셋하고 검색
-};
+// --- 4. (★제거됨★) '내 활동 로그' 관련 스크립트가 모두 삭제되었습니다. ---
+// const startDate = ref('');
+// ...
+// const handleLogSearch = () => { ... };
 
 // --- 5. (★수정★) 마운트 시 API 대신 localStorage에서 정보 로드 ---
 onMounted(() => {
     loadProfileFromStorage();
-    fetchLogs(1); // (Mock 로그 로드)
+    // (★제거됨★) fetchLogs(1) 호출이 삭제되었습니다.
 });
 </script>
 
