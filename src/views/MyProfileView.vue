@@ -108,8 +108,10 @@ const passwordData = ref({
 const loadProfileFromStorage = () => {
     const user = getLoggedInUser();
 
-    // (★수정★) 로그인 정보가 없으면 알림창 띄우고 돌려보냄
-    if (!user || !user.user_id) {
+    // (★수정★)
+    // localStorage에 저장된 키는 'userId' (camelCase)이므로 'user_id' (snake_case) 검사를 'userId'로 변경합니다.
+    if (!user || !user.userId) {
+        // ⬅️ 'user.user_id' -> 'user.userId'
         alert('로그인 정보가 없습니다. 다시 로그인해주세요.');
         localStorage.clear();
         window.location.href = '/login';
@@ -118,10 +120,11 @@ const loadProfileFromStorage = () => {
 
     loggedInUser.value = user; // 사용자 정보 저장
 
-    // 폼 데이터 채우기 (t_user 스키마 기준)
-    profileData.value.user_id = user.user_id;
-    profileData.value.login_id = user.login_id;
-    profileData.value.user_name = user.user_name;
+    // (★수정★)
+    // 폼 데이터 채우기 (localStorage에 저장된 API 응답 키 기준으로)
+    profileData.value.user_id = user.userId; // ⬅️ user.user_id -> user.userId
+    profileData.value.login_id = user.loginId; // ⬅️ user.login_id -> user.loginId
+    profileData.value.user_name = user.nickname; // ⬅️ user.user_name -> user.nickname
     profileData.value.telno = user.telno;
 };
 
@@ -135,20 +138,24 @@ const saveProfile = async () => {
     }
 
     try {
+        // (★수정★)
+        // 백엔드 auth.controller.js의 updateAdminMe는 req.body.nickname을 기대합니다.
         const params = {
-            // t_user 스키마에 맞는 컬럼명으로 전송
-            user_name: profileData.value.user_name,
+            nickname: profileData.value.user_name, // ⬅️ 'user_name' -> 'nickname'
             telno: profileData.value.telno,
         };
 
         // (★수정★) 요청하신 /api/users/me 경로로 PUT 요청
         // (api/index.js의 Interceptor가 토큰을 자동으로 헤더에 추가해줍니다.)
+        // (참고: authRoutes.js에 따르면 /api/auth/me 입니다. /api/users/me는 app/user.routes.js에 정의되어 있습니다)
+        // 우선 /users/me로 시도합니다.
         const response = await apiClient.put('/users/me', params);
 
         alert('프로필이 성공적으로 저장되었습니다.');
 
         // (★추가★) 변경된 정보를 localStorage에도 업데이트
         // (백엔드 /users/me가 수정한 user 객체를 반환한다고 가정)
+        // (백엔드 auth.service.js의 updateAdminInfo 응답은 nickname 키를 포함합니다)
         const updatedUser = { ...loggedInUser.value, ...response };
         localStorage.setItem('user', JSON.stringify(updatedUser));
 
