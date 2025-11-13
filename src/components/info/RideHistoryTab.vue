@@ -127,7 +127,24 @@
                 </div>
 
                 <div class="dialog-section">
-                    <h3 class="dialog-section-title">운행 중 이벤트 (GPS 경로)</h3>
+                    <h3 class="dialog-section-title">위치 지도 (GPS 경로)</h3>
+                    <div
+                        class="map-placeholder"
+                        style="height: 10rem; text-align: left; padding: 1rem; overflow-y: auto"
+                    >
+                        <div v-if="rideDetail.pathLoading">GPS 경로를 불러오는 중입니다...</div>
+                        <div v-else-if="!rideDetail.pathData || rideDetail.pathData.length === 0">
+                            <p>저장된 GPS 경로 데이터가 없습니다.</p>
+                        </div>
+                        <div v-else>
+                            <p>총 {{ rideDetail.pathData.length }}개의 GPS 포인트가 조회되었습니다.</p>
+                            <pre style="font-size: 0.75rem">{{ rideDetail.pathData[0] }}</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dialog-section">
+                    <h3 class="dialog-section-title">운행 중 이벤트 (위험 로그)</h3>
                     <div class="info-table-wrapper" style="max-height: 256px; overflow-y: auto">
                         <table class="info-table">
                             <thead class="info-table-header">
@@ -260,17 +277,22 @@ const fetchRides = async (page) => {
 };
 
 /**
- * (★수정★)
+ * (★수정★) 2.2
  * 상세 정보 API를 '/api/admin/rides/{rideId}/risks'로 변경
+ * (★추가★) '/api/admin/rides/{rideId}/path' API 호출
  */
 const openRideDetail = async (ride) => {
     selectedRide.value = ride;
-    rideDetail.value = null; // 로딩 시작
+    // (★수정★) pathData, pathLoading 필드 추가
+    rideDetail.value = {
+        ...ride,
+        events: [],
+        pathData: [],
+        pathLoading: true,
+    }; // 로딩 시작 (기본 정보 먼저 표시)
 
     try {
-        // (★핵심 수정★) API 명세서의 GET /admin/rides/{rideId}/risks 호출
-        // (기존: /api/admin/rides-logs)
-        // 파라미터가 URL 경로의 일부가 되었으므로 params 객체 제거
+        // 1. 위험 로그 (Risks) API 호출
         const logResponse = await apiClient.get(`/admin/rides/${ride.deviceId}/risks`);
 
         // (★신규★) API 응답(log.location)을 프론트엔드 형식으로 매핑
@@ -278,22 +300,26 @@ const openRideDetail = async (ride) => {
             time: formatDateTime(log.timestamp).time,
             kpiName: log.kpiName,
             // (GeoPoint가 {lat, lng} 객체라고 가정)
-            locationString: log.location ? `${log.location.lat}, ${log.location.lng}` : 'N/A',
+            locationString: log.location ? `${log.location.lat.toFixed(5)}, ${log.location.lng.toFixed(5)}` : 'N/A',
         }));
 
-        // (★수정★) 목록 데이터(ride)와 API 데이터(gpsEvents)를 조합
-        rideDetail.value = {
-            ...ride,
-            events: gpsEvents,
-        };
+        rideDetail.value.events = gpsEvents;
     } catch (error) {
-        console.error('운행 상세 로그 조회 실패:', error);
-        // (★수정★) 로그 조회에 실패해도, 기본 정보는 표시
-        rideDetail.value = {
-            ...ride,
-            events: [], // 이벤트는 빈 배열로
-        };
-        alert('상세 운행 로그(GPS) 로딩에 실패했습니다. 기본 정보만 표시됩니다.');
+        console.error('운행 상세 로그(Risks) 조회 실패:', error);
+        rideDetail.value.events = [];
+        alert('상세 운행 로그(Risks) 로딩에 실패했습니다.');
+    }
+
+    try {
+        // 2. (★신규★) GPS 경로 (Path) API 호출
+        const pathResponse = await apiClient.get(`/admin/rides/${ride.deviceId}/path`);
+        // (백엔드 응답이 { pathData: [...] } 라고 가정)
+        rideDetail.value.pathData = pathResponse.pathData || [];
+    } catch (error) {
+        console.error('운행 상세 경로(Path) 조회 실패:', error);
+        rideDetail.value.pathData = [];
+    } finally {
+        rideDetail.value.pathLoading = false;
     }
 };
 

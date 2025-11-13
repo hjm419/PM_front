@@ -70,21 +70,13 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import apiClient from '@/api/index.js';
-// (★제거됨★) '내 활동 로그'에서만 사용하던 InfoInput, InfoButton import가 삭제되었습니다.
-// import InfoInput from '@/components/ui/InfoInput.vue';
-// import InfoButton from '@/components/ui/InfoButton.vue';
+// (★제거됨★) '내 활동 로그' 관련 import 삭제
 
-// --- 1. (★핵심 수정★) 로그인한 사용자 '객체' 가져오기 ---
+// --- 1. 로그인한 사용자 '객체' 가져오기 (★수정★: API 호출을 위해 ref만 유지) ---
 const loggedInUser = ref(null);
 
-const getLoggedInUser = () => {
-    // LoginView에서 'user' 키로 localStorage에 저장한 객체를 가져옴
-    const userString = localStorage.getItem('user');
-    if (userString) {
-        return JSON.parse(userString);
-    }
-    return null;
-};
+// (★제거★) getLoggedInUser 함수 (API 호출로 대체됨)
+// const getLoggedInUser = () => { ... };
 
 // --- 2. 프로필 폼 데이터 ---
 const profileData = ref({
@@ -102,30 +94,48 @@ const passwordData = ref({
 });
 
 /**
- * (★핵심 수정★)
- * 페이지 로드 시, API 호출 대신 localStorage에서 프로필을 로드합니다.
+ * (★신규★) 2.4
+ * 페이지 로드 시, localStorage 대신 API를 호출하여 프로필 로드
  */
-const loadProfileFromStorage = () => {
-    const user = getLoggedInUser();
+const loadProfileFromAPI = async () => {
+    try {
+        // (★신규★) 명세서의 GET /api/auth/me 호출
+        const user = await apiClient.get('/auth/me');
 
-    // (★수정★)
-    // localStorage에 저장된 키는 'userId' (camelCase)이므로 'user_id' (snake_case) 검사를 'userId'로 변경합니다.
-    if (!user || !user.userId) {
-        // ⬅️ 'user.user_id' -> 'user.userId'
-        alert('로그인 정보가 없습니다. 다시 로그인해주세요.');
+        if (!user || !user.userId) {
+            throw new Error('Invalid user data from API');
+        }
+
+        // (★신규★) API 응답으로 loggedInUser ref 설정
+        // (참고: API 응답이 localStorage에 저장된 'user' 객체와 형식이 다를 수 있음)
+        // (api/index.js 인터셉터가 토큰을 localStorage에서 읽으므로,
+        //  로그인 시 저장했던 'user' 객체 형식을 유지하며 API 응답으로 덮어씀)
+        const storedUserString = localStorage.getItem('user');
+        const storedUser = storedUserString ? JSON.parse(storedUserString) : {};
+
+        loggedInUser.value = {
+            ...storedUser, // 기존 토큰 정보 등 유지
+            userId: user.userId,
+            loginId: user.loginId,
+            nickname: user.nickname,
+            telno: user.telno,
+            role: user.role,
+        };
+
+        // (★신규★) 최신 정보로 localStorage 업데이트
+        localStorage.setItem('user', JSON.stringify(loggedInUser.value));
+
+        // 폼 데이터 채우기 (API 응답 기준)
+        profileData.value.user_id = user.userId;
+        profileData.value.login_id = user.loginId;
+        profileData.value.user_name = user.nickname;
+        profileData.value.telno = user.telno;
+    } catch (error) {
+        console.error('Failed to load profile from API:', error);
+        alert('로그인 정보를 불러오는 데 실패했습니다. 다시 로그인해주세요.');
         localStorage.clear();
         window.location.href = '/login';
-        return;
     }
-
-    loggedInUser.value = user; // 사용자 정보 저장
-
-    // (★수정★)
-    // 폼 데이터 채우기 (localStorage에 저장된 API 응답 키 기준으로)
-    profileData.value.user_id = user.userId; // ⬅️ user.user_id -> user.userId
-    profileData.value.login_id = user.loginId; // ⬅️ user.login_id -> user.loginId
-    profileData.value.user_name = user.nickname; // ⬅️ user.user_name -> user.nickname
-    profileData.value.telno = user.telno;
 };
 
 /**
@@ -138,29 +148,22 @@ const saveProfile = async () => {
     }
 
     try {
-        // (★수정★)
-        // 백엔드 auth.controller.js의 updateAdminMe는 req.body.nickname을 기대합니다.
         const params = {
-            nickname: profileData.value.user_name, // ⬅️ 'user_name' -> 'nickname'
+            nickname: profileData.value.user_name,
             telno: profileData.value.telno,
         };
 
-        // (★수정★) 요청하신 /api/users/me 경로로 PUT 요청
-        // (api/index.js의 Interceptor가 토큰을 자동으로 헤더에 추가해줍니다.)
-        // (참고: authRoutes.js에 따르면 /api/auth/me 입니다. /api/users/me는 app/user.routes.js에 정의되어 있습니다)
-        // 우선 /users/me로 시도합니다.
-        const response = await apiClient.put('/users/me', params);
+        // (★수정★) 1.1에서 수정한 내용 (/auth/me)
+        const response = await apiClient.put('/auth/me', params);
 
         alert('프로필이 성공적으로 저장되었습니다.');
 
-        // (★추가★) 변경된 정보를 localStorage에도 업데이트
-        // (백엔드 /users/me가 수정한 user 객체를 반환한다고 가정)
-        // (백엔드 auth.service.js의 updateAdminInfo 응답은 nickname 키를 포함합니다)
+        // (★수정★) 2.4: API 응답(response) 기준으로 localStorage 업데이트
         const updatedUser = { ...loggedInUser.value, ...response };
         localStorage.setItem('user', JSON.stringify(updatedUser));
 
-        // 폼 데이터 다시 로드 (API 응답 기준으로)
-        loadProfileFromStorage();
+        // (★수정★) 2.4: API를 다시 호출하여 폼 새로고침
+        loadProfileFromAPI();
     } catch (error) {
         console.error('프로필 저장 실패:', error);
         alert('프로필 저장 중 오류가 발생했습니다.');
@@ -181,8 +184,6 @@ const changePassword = async () => {
     }
 
     try {
-        // (★핵심 수정★) API 명세서의 'PUT /api/auth/password' 경로를 사용
-
         const params = {
             currentPassword: passwordData.value.currentPw,
             newPassword: passwordData.value.newPw,
@@ -200,13 +201,10 @@ const changePassword = async () => {
 };
 
 // --- 4. (★제거됨★) '내 활동 로그' 관련 스크립트가 모두 삭제되었습니다. ---
-// const startDate = ref('');
-// ...
-// const handleLogSearch = () => { ... };
 
-// --- 5. (★수정★) 마운트 시 API 대신 localStorage에서 정보 로드 ---
+// --- 5. (★수정★) 2.4: 마운트 시 API에서 정보 로드 ---
 onMounted(() => {
-    loadProfileFromStorage();
+    loadProfileFromAPI();
     // (★제거됨★) fetchLogs(1) 호출이 삭제되었습니다.
 });
 </script>
