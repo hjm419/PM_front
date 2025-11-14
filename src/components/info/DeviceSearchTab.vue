@@ -120,7 +120,7 @@ const fetchDevices = async () => {
             return {
                 id: kickboard.pm_id,
                 model: kickboard.model || 'N/A',
-                status: kickboard.pmStatus,
+                status: kickboard.pm_status,
                 battery: kickboard.battery,
                 location: `${lat}, ${lng}`,
             };
@@ -191,7 +191,7 @@ const handleSetMaintenance = async () => {
     if (confirm(`정말로 ${selectedDevice.value.id} 기기의 상태를 '수리중'으로 변경하시겠습니까?`)) {
         try {
             await apiClient.put(`/admin/kickboards/${selectedDevice.value.id}`, {
-                pmStatus: '수리중',
+                pm_status: '수리중', // ⬅️ 수정 (DB 컬럼명과 일치)
             });
             // (★수정★) 바깥 따옴표를 큰따옴표로 변경
             alert("기기 상태가 '수리중'으로 변경되었습니다.");
