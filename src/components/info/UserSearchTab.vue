@@ -90,7 +90,7 @@
                     </div>
                 </div>
                 <div class="dialog-section">
-                    <h3 class="dialog-section-title">누적 이용 현황 (★Mock Data)</h3>
+                    <h3 class="dialog-section-title">누적 이용 현황</h3>
                     <div class="info-grid">
                         <div>
                             <p>총 이용 횟수</p>
@@ -102,27 +102,57 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="dialog-section">
-                    <h3 class="dialog-section-title">위험 행동 이력 (★Mock Data)</h3>
-                    <div class="info-table-wrapper" style="max-height: 256px; overflow-y: auto">
+                    <h3 class="dialog-section-title">위험 행동 이력</h3>
+                    <div class="info-table-wrapper" style="max-height: 280px; overflow-y: auto">
                         <table class="info-table">
                             <thead class="info-table-header">
                                 <tr>
                                     <th class="info-table-head">날짜</th>
                                     <th class="info-table-head">시간</th>
                                     <th class="info-table-head">위험 행동 유형</th>
-                                    <th class="info-table-head">조치 내역</th>
                                 </tr>
                             </thead>
                             <tbody class="info-table-body">
-                                <tr v-for="(record, idx) in userDetail.riskHistory" :key="idx" class="info-table-row">
+                                <tr v-if="riskIsLoading">
+                                    <td colspan="3" class="info-table-cell" style="text-align: center">
+                                        이력 로딩 중...
+                                    </td>
+                                </tr>
+                                <tr v-else-if="riskHistory.length === 0">
+                                    <td colspan="3" class="info-table-cell" style="text-align: center">
+                                        위험 행동 이력이 없습니다.
+                                    </td>
+                                </tr>
+                                <tr v-for="(record, idx) in riskHistory" :key="idx" class="info-table-row">
                                     <td class="info-table-cell">{{ record.date }}</td>
                                     <td class="info-table-cell">{{ record.time }}</td>
                                     <td class="info-table-cell">{{ record.type }}</td>
-                                    <td class="info-table-cell">{{ record.action }}</td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="pagination-controls" style="margin-top: 1rem" v-if="totalRiskLogs > 0">
+                        <p>총 {{ totalRiskLogs }}건</p>
+                        <div class="pagination-buttons">
+                            <InfoButton
+                                variant="outline"
+                                size="sm"
+                                @click="fetchRiskHistoryForPage(riskCurrentPage - 1)"
+                                :disabled="riskCurrentPage === 1"
+                                >이전</InfoButton
+                            >
+                            <span class="page-info">{{ riskCurrentPage }} / {{ riskTotalPages }}</span>
+                            <InfoButton
+                                variant="outline"
+                                size="sm"
+                                @click="fetchRiskHistoryForPage(riskCurrentPage + 1)"
+                                :disabled="riskCurrentPage === riskTotalPages"
+                                >다음</InfoButton
+                            >
+                        </div>
                     </div>
                 </div>
             </div>
@@ -141,17 +171,24 @@ import InfoButton from '../ui/InfoButton.vue';
 import InfoBadge from '../ui/InfoBadge.vue';
 import InfoDialog from '../ui/InfoDialog.vue';
 
+// --- (기존 상태) ---
 const searchTerm = ref('');
 const selectedUser = ref(null);
 const userDetail = ref(null);
 const isLoading = ref(true);
-
 const users = ref([]);
-
 const currentPage = ref(1);
 const totalPages = ref(1);
 const totalUsers = ref(0);
 const usersPerPage = 10;
+
+// --- (★신규★) 팝업 내 위험 이력(Risk History) 상태 ---
+const riskHistory = ref([]);
+const riskCurrentPage = ref(1);
+const riskTotalPages = ref(1);
+const totalRiskLogs = ref(0);
+const riskIsLoading = ref(false);
+const riskLogsPerPage = 5; // 팝업창은 5개씩
 
 const formatJoinDate = (dateTimeString) => {
     if (!dateTimeString) return 'N/A';
@@ -168,9 +205,7 @@ const fetchUsers = async (page) => {
     if (page < 1 || (page > totalPages.value && totalUsers.value > 0)) {
         return;
     }
-
     isLoading.value = true;
-
     try {
         currentPage.value = page;
         const params = {
@@ -178,12 +213,9 @@ const fetchUsers = async (page) => {
             size: usersPerPage,
             searchKeyword: searchTerm.value,
         };
-
         const response = await apiClient.get('/admin/users', { params });
-
         totalUsers.value = response.totalCount || 0;
         totalPages.value = Math.ceil(totalUsers.value / usersPerPage) || 1;
-
         users.value = response.users.map((user) => ({
             id: user.userId,
             name: user.nickname,
@@ -201,28 +233,26 @@ const fetchUsers = async (page) => {
     }
 };
 
+// (★수정★) 팝업 열기: 기본정보/통계만 불러오고, 이력은 따로 호출
 const openUserDetail = async (user) => {
     selectedUser.value = user;
-    userDetail.value = null;
+    userDetail.value = null; // 로딩 시작
 
     try {
+        // 1. 기본 정보 + 누적 통계 먼저 조회
         const detail = await apiClient.get(`/admin/users/${user.id}`);
 
-        // (★여기가 수정되었습니다★)
         userDetail.value = {
-            id: detail.user_id, // ⬅️ detail.userId -> detail.user_id
+            id: detail.user_id,
             name: detail.nickname,
             phone: detail.telno || 'N/A',
-            joinDate: formatJoinDate(detail.created_at), // ⬅️ detail.joinDate -> detail.created_at
-
-            // (★유지★) Mock Data (API 명세서에 없는 정보)
-            totalRides: 156,
-            totalPayment: '₩234,500',
-            riskHistory: [
-                { date: '2024-10-28', time: '14:32', type: '헬멧 미착용', action: '경고 발송' },
-                { date: '2024-10-15', time: '09:15', type: '급가속', action: '주의 알림' },
-            ],
+            joinDate: formatJoinDate(detail.created_at),
+            totalRides: detail.total_rides,
+            totalPayment: `₩${(detail.total_payment || 0).toLocaleString()}`,
         };
+
+        // 2. (★신규★) 위험 이력 1페이지 즉시 호출
+        fetchRiskHistoryForPage(1);
     } catch (error) {
         console.error('사용자 상세 정보 조회 실패:', error);
         alert('상세 정보 로딩에 실패했습니다.');
@@ -230,9 +260,54 @@ const openUserDetail = async (user) => {
     }
 };
 
+/**
+ * (★신규★) 팝업 내 위험 이력 페이징 함수
+ * @param {number} page
+ */
+const fetchRiskHistoryForPage = async (page) => {
+    if (page < 1 || (page > riskTotalPages.value && totalRiskLogs.value > 0)) {
+        return;
+    }
+    if (!selectedUser.value) return;
+
+    riskIsLoading.value = true;
+
+    try {
+        const params = {
+            page: page,
+            size: riskLogsPerPage,
+        };
+        // (★신규★) 새 API 호출
+        const response = await apiClient.get(`/admin/users/${selectedUser.value.id}/risks`, { params });
+
+        // (★수정★) 조치 내역(action) 컬럼 제거
+        riskHistory.value = response.logs.map((log) => ({
+            date: log.date,
+            time: log.time,
+            type: log.type,
+        }));
+
+        totalRiskLogs.value = response.totalCount || 0;
+        riskCurrentPage.value = page;
+        riskTotalPages.value = Math.ceil(totalRiskLogs.value / riskLogsPerPage) || 1;
+    } catch (error) {
+        console.error('사용자 위험 이력 조회 실패:', error);
+        riskHistory.value = [];
+        totalRiskLogs.value = 0;
+    } finally {
+        riskIsLoading.value = false;
+    }
+};
+
+// (★수정★) 팝업 닫기: 이력 상태 초기화
 const closeDialog = () => {
     selectedUser.value = null;
     userDetail.value = null;
+    // (★신규★) 이력 상태 초기화
+    riskHistory.value = [];
+    riskCurrentPage.value = 1;
+    riskTotalPages.value = 1;
+    totalRiskLogs.value = 0;
 };
 
 onMounted(() => {

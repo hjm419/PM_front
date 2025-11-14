@@ -381,6 +381,7 @@ const fetchRegionalScores = async () => {
             { region: '부곡동 (더미)', score: 78, trend: '-3' },
             { region: '거의동 (더미)', score: 82, trend: '+1' },
             { region: '옥계동 (더미)', score: 75, trend: '-1' },
+            { region: '사곡동 (더미)', score: 80, trend: '-2' },
         ];
     } catch (error) {
         console.error('지역별 안전 점수 데이터 로딩 실패:', error);

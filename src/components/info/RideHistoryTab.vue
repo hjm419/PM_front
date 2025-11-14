@@ -117,7 +117,7 @@
                         </div>
                         <div>
                             <p>헬멧 착용</p>
-                            <p>{{ rideDetail.helmetOn ? '착용' : 'N/A' }}</p>
+                            <p>{{ rideDetail.helmetOn ? '착용' : '미착용' }}</p>
                         </div>
                         <div>
                             <p>위험 행동 (총)</p>
@@ -199,7 +199,6 @@ const ridesPerPage = 10;
 const selectedRide = ref(null);
 const rideDetail = ref(null);
 
-// (★수정★) API의 Timestamp (ISO string)에서 날짜/시간 추출
 const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) {
         return { date: 'N/A', time: 'N/A' };
@@ -219,8 +218,7 @@ const formatDateTime = (dateTimeString) => {
 
 /**
  * (★수정★)
- * API 경로를 '/api/admin/rides'로 변경
- * API 명세서에 맞게 params와 데이터 매핑 수정
+ * Mock 데이터 제거, API가 반환하는 helmetOn 사용
  */
 const fetchRides = async (page) => {
     if (page < 1 || (page > totalPages.value && totalRides.value > 0)) {
@@ -231,24 +229,20 @@ const fetchRides = async (page) => {
 
     try {
         currentPage.value = page;
-        // (★핵심 수정★) API 명세서에 맞게 startDate, endDate 파라미터 추가
         const params = {
             page: page,
             size: ridesPerPage,
-            userId: userId.value || null, // 빈 문자열 대신 null
-            pmId: deviceId.value || null, // 빈 문자열 대신 null
-            startDate: startDate.value || null, // 날짜 필터 추가
-            endDate: endDate.value || null, // 날짜 필터 추가
+            userId: userId.value || null,
+            pmId: deviceId.value || null,
+            startDate: startDate.value || null,
+            endDate: endDate.value || null,
         };
 
-        // (★수정★) API 경로: /trip/selectUserLogs.json -> /admin/rides
         const response = await apiClient.get('/admin/rides', { params });
 
-        // (★수정★) API 명세서 응답 형식에 맞춤
         totalRides.value = response.totalCount || 0;
         totalPages.value = Math.ceil(totalRides.value / ridesPerPage) || 1;
 
-        // (★수정★) API 명세서 필드명에 맞게 매핑
         rides.value = response.rides.map((ride) => {
             const startTime = formatDateTime(ride.startTime);
             const endTime = formatDateTime(ride.endTime);
@@ -256,14 +250,16 @@ const fetchRides = async (page) => {
             return {
                 date: startTime.date,
                 userId: ride.userId,
-                deviceId: ride.rideId, // (T_RIDE의 PK인 ride_id)
+                deviceId: ride.rideId,
                 startTime: startTime.time,
                 endTime: endTime.time,
-                score: ride.safetyScore, // (★핵심 수정★) API 명세서에 추가된 safetyScore 사용
+                score: ride.safetyScore,
 
-                // (★유지★) 상세 다이얼로그에서 사용할 Mock 데이터 (API에 없음)
-                helmetOn: false,
-                abruptCount: 0,
+                // (★수정★) Mock Data -> Real Data
+                helmetOn: ride.helmetOn, // (API에서 받아온 실제 헬멧 착용 여부)
+
+                // (★수정★) Mock Data 제거 (상세 조회 시 API로 가져옴)
+                // abruptCount: 0,
             };
         });
     } catch (error) {
@@ -277,33 +273,34 @@ const fetchRides = async (page) => {
 };
 
 /**
- * (★수정★) 2.2
- * 상세 정보 API를 '/api/admin/rides/{rideId}/risks'로 변경
- * (★추가★) '/api/admin/rides/{rideId}/path' API 호출
+ * (★수정★)
+ * API 응답(totalCount)을 abruptCount에 매핑
  */
 const openRideDetail = async (ride) => {
     selectedRide.value = ride;
-    // (★수정★) pathData, pathLoading 필드 추가
+    // (★수정★) pathData, pathLoading 필드 추가 및 abruptCount 초기화
     rideDetail.value = {
         ...ride,
         events: [],
         pathData: [],
         pathLoading: true,
+        abruptCount: 0, // (기본값 0)
     }; // 로딩 시작 (기본 정보 먼저 표시)
 
     try {
         // 1. 위험 로그 (Risks) API 호출
         const logResponse = await apiClient.get(`/admin/rides/${ride.deviceId}/risks`);
 
-        // (★신규★) API 응답(log.location)을 프론트엔드 형식으로 매핑
         const gpsEvents = logResponse.logs.map((log) => ({
             time: formatDateTime(log.timestamp).time,
             kpiName: log.kpiName,
-            // (GeoPoint가 {lat, lng} 객체라고 가정)
             locationString: log.location ? `${log.location.lat.toFixed(5)}, ${log.location.lng.toFixed(5)}` : 'N/A',
         }));
 
         rideDetail.value.events = gpsEvents;
+
+        // (★이 줄을 추가★)
+        rideDetail.value.abruptCount = logResponse.totalCount; // (실제 위험 횟수)
     } catch (error) {
         console.error('운행 상세 로그(Risks) 조회 실패:', error);
         rideDetail.value.events = [];
@@ -313,7 +310,6 @@ const openRideDetail = async (ride) => {
     try {
         // 2. (★신규★) GPS 경로 (Path) API 호출
         const pathResponse = await apiClient.get(`/admin/rides/${ride.deviceId}/path`);
-        // (백엔드 응답이 { pathData: [...] } 라고 가정)
         rideDetail.value.pathData = pathResponse.pathData || [];
     } catch (error) {
         console.error('운행 상세 경로(Path) 조회 실패:', error);
