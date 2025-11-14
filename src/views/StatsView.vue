@@ -286,21 +286,38 @@ const fetchKpiData = async () => {
         ]);
 
         kpiData.value.users.value = (kpiResponse.totalUserCount || 0).toLocaleString();
-        kpiData.value.distance.value = (kpiResponse.totalDistance || 0).toLocaleString();
-        kpiData.value.risks.value = (kpiResponse.totalRiskCount || 0).toLocaleString();
-        kpiData.value.helmetRate.value = (kpiResponse.helmetRate || 0).toFixed(1);
-        kpiData.value.safetyScore.value = (scoreResponse.averageScore || 0).toFixed(1);
 
-        const totalRides = trendResponse.datasets.rideCounts.reduce((a, b) => a + b, 0);
+        // (★수정★) 백엔드가 보낸 문자열("14.5")을 숫자로 변환 후 포맷팅
+        kpiData.value.distance.value = (parseFloat(kpiResponse.totalDistance) || 0).toLocaleString();
+
+        kpiData.value.risks.value = (kpiResponse.totalRiskCount || 0).toLocaleString();
+
+        // (★수정★) 백엔드가 보낸 문자열("95.0")을 .toFixed() 없이 그대로 사용
+        kpiData.value.helmetRate.value = kpiResponse.helmetRate || '0.0';
+
+        // (★수정★) 백엔드가 보낸 문자열("88.0")을 .toFixed() 없이 그대로 사용
+        kpiData.value.safetyScore.value = scoreResponse.averageScore || '0.0';
+
+        // (★수정★) totalRides 계산 (trendResponse가 유효한지 확인)
+        const totalRides = trendResponse?.datasets?.rideCounts?.reduce((a, b) => a + b, 0) || 0;
         kpiData.value.rides.value = totalRides.toLocaleString();
 
+        // (★수정★) riskRate 계산 (0으로 나누기 방지)
         if (totalRides > 0) {
             kpiData.value.riskRate.value = ((kpiResponse.totalRiskCount / totalRides) * 100).toFixed(1);
         } else {
-            kpiData.value.riskRate.value = '0';
+            kpiData.value.riskRate.value = '0.0'; // 0.0으로 통일
         }
     } catch (error) {
         console.error('KPI 데이터 로딩 실패:', error);
+        // (★추가★) 실패 시 모든 값을 '오류'로 설정
+        kpiData.value.users.value = '오류';
+        kpiData.value.distance.value = '오류';
+        kpiData.value.risks.value = '오류';
+        kpiData.value.helmetRate.value = '오류';
+        kpiData.value.safetyScore.value = '오류';
+        kpiData.value.rides.value = '오류';
+        kpiData.value.riskRate.value = '오류';
     }
 };
 

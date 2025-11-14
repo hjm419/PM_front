@@ -38,7 +38,9 @@
                         <td class="info-table-cell">{{ device.id }}</td>
                         <td class="info-table-cell">{{ device.model }}</td>
                         <td class="info-table-cell">
-                            <InfoBadge :variant="getStatusVariant(device.status)">{{ device.status }}</InfoBadge>
+                            <InfoBadge :variant="getStatusVariant(device.status)">
+                                {{ translateStatusToKorean(device.status) }}
+                            </InfoBadge>
                         </td>
                         <td class="info-table-cell">{{ device.battery }}%</td>
                         <td class="info-table-cell">{{ device.location }}</td>
@@ -101,13 +103,6 @@ const isLoading = ref(true);
 const allDevices = ref([]);
 const currentSearch = ref('');
 
-// (★제거★) '기기 이력' 관련 ref 2개 제거
-// const isDetailLoading = ref(false);
-// const deviceHistory = ref([]);
-
-// (★제거★) '기기 이력' 날짜 포맷 함수 제거
-// const formatHistoryDate = (dateTimeString) => { ... };
-
 const fetchDevices = async () => {
     isLoading.value = true;
     try {
@@ -120,7 +115,7 @@ const fetchDevices = async () => {
             return {
                 id: kickboard.pm_id,
                 model: kickboard.model || 'N/A',
-                status: kickboard.pm_status,
+                status: kickboard.pm_status, // 'available', 'in_use' 등 영어 값
                 battery: kickboard.battery,
                 location: `${lat}, ${lng}`,
             };
@@ -144,22 +139,12 @@ const filteredDevices = computed(() => {
     return allDevices.value.filter((device) => device.id.toLowerCase().includes(currentSearch.value.toLowerCase()));
 });
 
-/**
- * (★수정★)
- * 다이얼로그 열기 (API 호출 로직 제거)
- */
 const openDeviceDetail = (device) => {
     selectedDevice.value = device;
-    // (★제거★) '기기 이력' API 호출 로직 모두 제거
 };
 
-/**
- * (★수정★)
- * 다이얼로그 닫기 (이력 초기화 로직 제거)
- */
 const closeDialog = () => {
     selectedDevice.value = null;
-    // (★제거★) deviceHistory.value = [];
 };
 
 // --- (v1.2 명세서 버튼 API 연동) ---
@@ -184,17 +169,17 @@ const handleRemoteLock = async () => {
 };
 
 /**
- * 수리 중으로 변경
+ * 수리 중으로 변경 (백엔드에 'maintenance' 전송)
  */
 const handleSetMaintenance = async () => {
     if (!selectedDevice.value) return;
     if (confirm(`정말로 ${selectedDevice.value.id} 기기의 상태를 '수리중'으로 변경하시겠습니까?`)) {
         try {
             await apiClient.put(`/admin/kickboards/${selectedDevice.value.id}`, {
-                pm_status: '수리중', // ⬅️ 수정 (DB 컬럼명과 일치)
+                pm_status: 'maintenance',
             });
-            // (★수정★) 바깥 따옴표를 큰따옴표로 변경
-            alert("기기 상태가 '수리중'으로 변경되었습니다.");
+
+            alert("기기 상태가 'maintenance' (수리중)으로 변경되었습니다.");
 
             fetchDevices();
             closeDialog();
@@ -205,15 +190,38 @@ const handleSetMaintenance = async () => {
     }
 };
 
+/**
+ * (★수정★)
+ * 백엔드 (영어) 상태 값을 프론트엔드 (한글) 텍스트로 번역
+ */
+const translateStatusToKorean = (status) => {
+    switch (status) {
+        case 'available':
+            return '대기';
+        case 'in_use': // (★핵심 수정★) 'in-use' -> 'in_use' (밑줄)
+            return '사용중';
+        case 'maintenance':
+            return '수리중';
+        default:
+            return status; // '수리중' 등 이미 한글이거나 알 수 없는 값
+    }
+};
+
+/**
+ * (★수정★)
+ * 뱃지 색상을 결정하는 로직 (이제 영어 상태 값을 기준으로 함)
+ */
 const getStatusVariant = (status) => {
     switch (status) {
-        case '사용중':
-            return 'default';
-        case '대기':
-            return 'secondary';
-        case '수리중':
-            return 'destructive';
+        case 'in_use': // (★핵심 수정★) 'in-use' -> 'in_use' (밑줄)
+            return 'default'; // 파란색
+        case 'available':
+            return 'secondary'; // 회색
+        case 'maintenance':
+            return 'destructive'; // 빨간색
         default:
+            // '수리중'(한글) 값이 DB에 이미 저장된 경우를 대비한 호환 코드
+            if (status === '수리중') return 'destructive';
             return 'default';
     }
 };
