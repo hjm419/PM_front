@@ -15,7 +15,7 @@
                         <th class="info-table-head">이름 (닉네임)</th>
                         <th class="info-table-head">가입일</th>
                         <th class="info-table-head">평균 안전 점수</th>
-                        <th class="info-table-head">상태</th>
+                        <th class="info-table-head">역할</th>
                     </tr>
                 </thead>
                 <tbody class="info-table-body">
@@ -39,11 +39,7 @@
                         <td class="info-table-cell">{{ user.name }}</td>
                         <td class="info-table-cell">{{ user.joinDate }}</td>
                         <td class="info-table-cell">{{ user.safetyScore }}점</td>
-                        <td class="info-table-cell">
-                            <InfoBadge :variant="user.status === '정상' ? 'default' : 'destructive'">
-                                {{ user.status }}
-                            </InfoBadge>
-                        </td>
+                        <td class="info-table-cell">{{ user.role }}</td>
                     </tr>
                 </tbody>
             </table>
@@ -129,11 +125,6 @@
                         </table>
                     </div>
                 </div>
-                <div class="dialog-section action-buttons">
-                    <InfoButton variant="outline">경고 메시지 전송</InfoButton>
-                    <InfoButton variant="outline">페널티 부여</InfoButton>
-                    <InfoButton variant="destructive" class="ml-auto"> 계정 이용 정지 </InfoButton>
-                </div>
             </div>
             <div v-else style="min-height: 300px; display: flex; align-items: center; justify-content: center">
                 <p>사용자 상세 정보를 불러오는 중입니다...</p>
@@ -198,7 +189,7 @@ const fetchUsers = async (page) => {
             name: user.nickname,
             joinDate: formatJoinDate(user.joinDate),
             safetyScore: user.safetyScore,
-            status: user.status,
+            role: user.role || 'user',
         }));
     } catch (error) {
         console.error('사용자 목록 조회 실패:', error);
@@ -217,11 +208,12 @@ const openUserDetail = async (user) => {
     try {
         const detail = await apiClient.get(`/admin/users/${user.id}`);
 
+        // (★여기가 수정되었습니다★)
         userDetail.value = {
-            id: detail.userId,
+            id: detail.user_id, // ⬅️ detail.userId -> detail.user_id
             name: detail.nickname,
             phone: detail.telno || 'N/A',
-            joinDate: formatJoinDate(detail.joinDate),
+            joinDate: formatJoinDate(detail.created_at), // ⬅️ detail.joinDate -> detail.created_at
 
             // (★유지★) Mock Data (API 명세서에 없는 정보)
             totalRides: 156,
@@ -242,8 +234,6 @@ const closeDialog = () => {
     selectedUser.value = null;
     userDetail.value = null;
 };
-
-// --- (★제거★) v1.2 명세서에 따라 handleWarnUser, handlePenalizeUser, handleSuspendUser 함수 3개 모두 제거 ---
 
 onMounted(() => {
     fetchUsers(1);

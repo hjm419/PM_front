@@ -111,6 +111,11 @@
                                 </tr>
                             </thead>
                             <tbody class="info-table-body">
+                                <tr v-if="riskTypeData.length === 0">
+                                    <td colspan="3" class="info-table-cell" style="text-align: center; height: 100px">
+                                        데이터가 없습니다.
+                                    </td>
+                                </tr>
                                 <tr v-for="item in riskTypeData" :key="item.name" class="info-table-row">
                                     <td class="info-table-cell">
                                         <div class="legend-item">
@@ -138,6 +143,11 @@
                             </tr>
                         </thead>
                         <tbody class="info-table-body">
+                            <tr v-if="topRegionsData.length === 0">
+                                <td colspan="3" class="info-table-cell" style="text-align: center; height: 100px">
+                                    (더미 데이터 로드 중)
+                                </td>
+                            </tr>
                             <tr v-for="item in topRegionsData" :key="item.regionName" class="info-table-row">
                                 <td class="info-table-cell" style="text-align: center; font-weight: 600">
                                     {{ item.rank }}
@@ -176,6 +186,11 @@
                             </tr>
                         </thead>
                         <tbody class="info-table-body">
+                            <tr v-if="regionData.length === 0">
+                                <td colspan="4" class="info-table-cell" style="text-align: center; height: 100px">
+                                    (더미 데이터 로드 중)
+                                </td>
+                            </tr>
                             <tr v-for="item in regionData" :key="item.region" class="info-table-row">
                                 <td class="info-table-cell">{{ item.region }}</td>
                                 <td class="info-table-cell">{{ item.score }}점</td>
@@ -209,7 +224,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import apiClient from '@/api/index.js'; // (★추가★)
+import apiClient from '@/api/index.js';
 import StatsKpiCard from '@/components/StatsKpiCard.vue';
 import StatCard from '@/components/StatCard.vue';
 import InfoInput from '@/components/ui/InfoInput.vue';
@@ -230,13 +245,13 @@ const startDate = ref(getPastDate(30)); // 기본 30일 전
 const endDate = ref(getToday()); // 오늘
 const showRiskTable = ref(false);
 
-// (★신규★) API 호출 파라미터용
+// API 호출 파라미터용
 const apiParams = computed(() => ({
     startDate: startDate.value,
     endDate: endDate.value,
 }));
 
-// --- (★수정★) 모든 데이터를 API 응답을 받을 ref로 변경 (초기값: '...') ---
+// --- API 응답을 받을 ref로 변경 (초기값: '...') ---
 const kpiData = ref({
     users: { value: '...', unit: '명' },
     distance: { value: '...', unit: 'km' },
@@ -249,13 +264,16 @@ const kpiData = ref({
 
 const kpiTrendData = ref({ labels: [], datasets: { rideCounts: [], helmetRates: [], riskCounts: [] } });
 const riskTypeData = ref([]);
-const userGroupData = ref([]); // (★수정★)
 const timeRiskData = ref({ labels: [], data: [] });
 const safetyScoreDistribution = ref({ labels: [], data: [] });
-const regionData = ref([]); // (★수정★)
+
+// API 호출용 ref
+const userGroupData = ref([]);
+// 더미 데이터용 ref
+const regionData = ref([]);
 const topRegionsData = ref([]);
 
-// --- (★신규★) API 호출 함수들 ---
+// --- API 호출 함수들 ---
 
 // 7개 KPI 데이터
 const fetchKpiData = async () => {
@@ -273,11 +291,9 @@ const fetchKpiData = async () => {
         kpiData.value.helmetRate.value = (kpiResponse.helmetRate || 0).toFixed(1);
         kpiData.value.safetyScore.value = (scoreResponse.averageScore || 0).toFixed(1);
 
-        // (누적 운행 수: kpi-trends 응답의 rideCounts 배열의 합)
         const totalRides = trendResponse.datasets.rideCounts.reduce((a, b) => a + b, 0);
         kpiData.value.rides.value = totalRides.toLocaleString();
 
-        // (평균 위험항목 발생율: totalRiskCount / totalRides)
         if (totalRides > 0) {
             kpiData.value.riskRate.value = ((kpiResponse.totalRiskCount / totalRides) * 100).toFixed(1);
         } else {
@@ -285,13 +301,13 @@ const fetchKpiData = async () => {
         }
     } catch (error) {
         console.error('KPI 데이터 로딩 실패:', error);
-        // 에러 시 '...' 유지
     }
 };
 
 // KPI 트렌드 (LineChart)
 const fetchKpiTrends = async () => {
     try {
+        // (★수정★) params -> apiParams.value
         const response = await apiClient.get('/admin/stats/kpi-trends', {
             params: { ...apiParams.value, interval: 'daily' },
         });
@@ -309,8 +325,8 @@ const fetchRiskTypes = async () => {
         const response = await apiClient.get('/admin/stats/risk-types', { params: apiParams.value });
         riskTypeData.value = response.data.map((item, index) => ({
             name: item.kpiName,
-            value: item.percentage, // 파이 차트용 %
-            count: item.count, // 테이블용 건수
+            value: item.percentage,
+            count: item.count,
             color: riskColors[index % riskColors.length],
         }));
     } catch (error) {
@@ -319,11 +335,16 @@ const fetchRiskTypes = async () => {
     }
 };
 
-// Top 5 위험 지역 (Table)
+// "사고 많이 날거 같은 지역" (더미 데이터)
 const fetchTopRegions = async () => {
     try {
-        const response = await apiClient.get('/admin/stats/top-risk-regions', { params: apiParams.value });
-        topRegionsData.value = response.regions;
+        topRegionsData.value = [
+            { rank: 1, regionName: '구미역 네거리 (더미)', count: 132 },
+            { rank: 2, regionName: '인동 로데오거리 (더미)', count: 105 },
+            { rank: 3, regionName: '시청 앞 사거리 (더미)', count: 91 },
+            { rank: 4, regionName: '송정동 먹자골목 (더미)', count: 77 },
+            { rank: 5, regionName: '원평동 문화로 (더미)', count: 65 },
+        ];
     } catch (error) {
         console.error('Top 위험 지역 데이터 로딩 실패:', error);
         topRegionsData.value = [];
@@ -341,22 +362,26 @@ const fetchHourlyRisk = async () => {
     }
 };
 
-// (★신규★) 사용자 그룹별 비교 (BarChart) - v1.2 API
+// (★수정★) 사용자 그룹별 비교 (API 호출)
 const fetchUserGroupComparison = async () => {
     try {
         const response = await apiClient.get('/admin/stats/user-group-comparison', { params: apiParams.value });
-        userGroupData.value = response.groups; // API 응답 형식: [{ group: '...', 안전점수: 0, 위험행동빈도: 0 }]
+        userGroupData.value = response.groups;
     } catch (error) {
         console.error('사용자 그룹 비교 데이터 로딩 실패:', error);
         userGroupData.value = [];
     }
 };
 
-// (★신규★) 지역별 안전 점수 (Table) - v1.2 API
+// "금오공대 주변 동" (더미 데이터)
 const fetchRegionalScores = async () => {
     try {
-        const response = await apiClient.get('/admin/stats/regional-scores', { params: apiParams.value });
-        regionData.value = response.regions; // API 응답 형식: [{ region: '...', score: 0, trend: '+0' }]
+        regionData.value = [
+            { region: '양호동 (더미)', score: 85, trend: '+2' },
+            { region: '부곡동 (더미)', score: 78, trend: '-3' },
+            { region: '거의동 (더미)', score: 82, trend: '+1' },
+            { region: '옥계동 (더미)', score: 75, trend: '-1' },
+        ];
     } catch (error) {
         console.error('지역별 안전 점수 데이터 로딩 실패:', error);
         regionData.value = [];
@@ -376,20 +401,22 @@ const fetchSafetyScoreDistribution = async () => {
     }
 };
 
-// (★수정★) '조회' 버튼 클릭 시 모든 API 호출
+// '조회' 버튼 클릭 시 (API 호출 목록에 fetchUserGroupComparison 포함)
 const fetchAllStatsData = () => {
     fetchKpiData();
     fetchKpiTrends();
     fetchRiskTypes();
-    fetchTopRegions();
+    // fetchTopRegions(); // (더미)
     fetchHourlyRisk();
     fetchSafetyScoreDistribution();
-    fetchUserGroupComparison(); // (★신규★) v1.2 API 호출
-    fetchRegionalScores(); // (★신규★) v1.2 API 호출
+    fetchUserGroupComparison(); // (★API 호출★)
+    // fetchRegionalScores(); // (더미)
 };
 
+// (★추가★) 사용자 그룹 차트의 고정된 X축 레이블
+const userGroupLabels = ['신규 사용자', '10회 이상', '100회 이상'];
+
 // --- 차트 데이터 가공 (computed) ---
-// (API 응답 ref를 사용하도록 수정)
 const kpiTrendChartData = computed(() => ({
     labels: kpiTrendData.value.labels,
     datasets: [
@@ -480,25 +507,47 @@ const timeRiskChartOptions = {
         legend: { display: false },
     },
 };
-// (★수정★) v1.2 API (userGroupData) 사용
-const userGroupChartData = computed(() => ({
-    labels: userGroupData.value.map((d) => d.group),
-    datasets: [
-        {
-            label: '안전점수',
-            data: userGroupData.value.map((d) => d.안전점수),
-            backgroundColor: '#3B82F6',
-            borderRadius: 4,
-        },
-    ],
-}));
+
+// (★수정★) userGroupChartData: 고정 레이블 및 데이터 매핑
+const userGroupChartData = computed(() => {
+    // API 응답(userGroupData.value)을 { '신규 사용자': 75, ... } 형태의 Map으로 변환
+    const dataMap = new Map(userGroupData.value.map((d) => [d.group, d['평균 안전점수']]));
+
+    // 고정된 레이블 순서대로 데이터를 매핑 (없으면 0)
+    const data = userGroupLabels.map((label) => dataMap.get(label) || 0);
+
+    return {
+        labels: userGroupLabels, // (★수정★) 고정 레이블 사용
+        datasets: [
+            {
+                label: '평균 안전점수',
+                data: data, // (★수정★) 매핑된 데이터 사용
+                backgroundColor: '#3B82F6',
+                borderRadius: 4,
+            },
+        ],
+    };
+});
+
+// (★유지★) userGroupChartOptions: 단일 Y축 (API 기준)
 const userGroupChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-        legend: { display: true, position: 'bottom' },
+        legend: { display: false },
+    },
+    scales: {
+        y: {
+            type: 'linear',
+            display: true,
+            position: 'left',
+            title: { display: true, text: '평균 안전 점수' },
+            min: 0,
+            max: 100,
+        },
     },
 };
+
 const safetyScoreChartData = computed(() => ({
     labels: safetyScoreDistribution.value.labels,
     datasets: [
@@ -518,9 +567,13 @@ const safetyScoreChartOptions = {
     },
 };
 
-// (★수정★) 마운트 시 모든 API 호출
+// 마운트 시 API 및 더미 데이터 2개 호출
 onMounted(() => {
-    fetchAllStatsData();
+    fetchAllStatsData(); // API 호출 (이 안에 fetchUserGroupComparison 포함)
+
+    // (더미 데이터)
+    fetchTopRegions();
+    fetchRegionalScores();
 });
 </script>
 
