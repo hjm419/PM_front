@@ -45,8 +45,8 @@ onMounted(async () => {
 
             return {
                 // UserList.vue용 필드
-                id: kickboard.pmId, // (pmId)
-                startTime: kickboard.pmStatus, // (pmStatus)
+                id: kickboard.pm_id, // ⬅️ 수정
+                startTime: kickboard.pm_status, // ⬅️ 수정
                 endTime: '', // 사용하지 않음
 
                 // RealtimeMap.vue + UserList.vue 공용 필드
