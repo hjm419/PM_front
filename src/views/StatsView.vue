@@ -1,22 +1,5 @@
 <template>
     <div class="stats-container">
-        <div class="stats-header">
-            <div class="filter-controls">
-                <div class="filter-item">
-                    <label class="filter-label">시작일</label>
-                    <InfoInput type="date" v-model="startDate" />
-                </div>
-                <div class="filter-item">
-                    <label class="filter-label">종료일</label>
-                    <InfoInput type="date" v-model="endDate" />
-                </div>
-                <InfoButton variant="default" @click="fetchAllStatsData">
-                    <template #icon><v-icon name="bi-search" /></template>
-                    조회
-                </InfoButton>
-            </div>
-        </div>
-
         <section class="kpi-grid-4">
             <StatsKpiCard
                 title="누적 이용자 수"
@@ -50,7 +33,7 @@
 
         <section class="kpi-grid-3">
             <StatsKpiCard
-                title="평균 위험항목 발생율"
+                title="운행 1건당 평균 위험"
                 :value="kpiData.riskRate.value"
                 :unit="kpiData.riskRate.unit"
                 icon="bi-graph-up"
@@ -174,7 +157,7 @@
                 </div>
             </StatCard>
 
-            <StatCard title="지역별 안전 점수 평균">
+            <StatCard title="지역별 안전 점수 평균 (더미)">
                 <div class="info-table-wrapper" style="max-height: 280px; overflow-y: auto">
                     <table class="info-table">
                         <thead class="info-table-header">
@@ -234,30 +217,24 @@ import LineChart from '@/components/charts/LineChart.vue';
 import BarChart from '@/components/charts/BarChart.vue';
 import PieChart from '@/components/charts/PieChart.vue';
 
-// --- 기간 필터 상태 ---
-const getToday = () => new Date().toISOString().split('T')[0];
-const getPastDate = (days) => {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
-    return date.toISOString().split('T')[0];
-};
-const startDate = ref(getPastDate(30)); // 기본 30일 전
-const endDate = ref(getToday()); // 오늘
+// (★추가★) `riskColors is not defined` 오류 해결
+const riskColors = ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6'];
+
+// --- (★제거★) 기간 필터 상태 제거 ---
+// const startDate = ref(null);
+// const endDate = ref(null);
 const showRiskTable = ref(false);
 
-// API 호출 파라미터용
-const apiParams = computed(() => ({
-    startDate: startDate.value,
-    endDate: endDate.value,
-}));
+// (★제거★) apiParams 제거
+// const apiParams = computed(() => ({ ... }));
 
-// --- API 응답을 받을 ref로 변경 (초기값: '...') ---
+// --- (★수정★) riskRate의 unit을 '%' -> '건'으로 변경 ---
 const kpiData = ref({
     users: { value: '...', unit: '명' },
     distance: { value: '...', unit: 'km' },
     rides: { value: '...', unit: '건' },
     risks: { value: '...', unit: '건' },
-    riskRate: { value: '...', unit: '%' },
+    riskRate: { value: '...', unit: '건' }, // (★수정★)
     helmetRate: { value: '...', unit: '%' },
     safetyScore: { value: '...', unit: '점' },
 });
@@ -273,41 +250,45 @@ const userGroupData = ref([]);
 const regionData = ref([]);
 const topRegionsData = ref([]);
 
+// --- (★추가★) 날짜 헬퍼 (트렌드 차트용) ---
+const getToday = () => new Date().toISOString().split('T')[0];
+const getPastDate = (days) => {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    return date.toISOString().split('T')[0];
+};
+
 // --- API 호출 함수들 ---
 
-// 7개 KPI 데이터
+// (★수정★) 7개 KPI 데이터 (날짜 필터 제거)
 const fetchKpiData = async () => {
     try {
-        const params = apiParams.value;
-        const [kpiResponse, scoreResponse, trendResponse] = await Promise.all([
-            apiClient.get('/admin/stats/kpis', { params }),
-            apiClient.get('/admin/stats/safety-scores', { params }),
-            apiClient.get('/admin/stats/kpi-trends', { params: { ...params, interval: 'daily' } }),
+        // (★수정★) params 제거
+        const [kpiResponse, scoreResponse] = await Promise.all([
+            apiClient.get('/admin/stats/kpis'), // (전체 기간 KPI 5종)
+            apiClient.get('/admin/stats/safety-scores'), // (전체 기간 평균 점수)
         ]);
 
+        // (★수정★) kpiResponse (전체 기간)에서 5개 KPI 설정
         kpiData.value.users.value = (kpiResponse.totalUserCount || 0).toLocaleString();
-
-        // (★수정★) 백엔드가 보낸 문자열("14.5")을 숫자로 변환 후 포맷팅
         kpiData.value.distance.value = (parseFloat(kpiResponse.totalDistance) || 0).toLocaleString();
-
         kpiData.value.risks.value = (kpiResponse.totalRiskCount || 0).toLocaleString();
-
-        // (★수정★) 백엔드가 보낸 문자열("95.0")을 .toFixed() 없이 그대로 사용
         kpiData.value.helmetRate.value = kpiResponse.helmetRate || '0.0';
+        kpiData.value.rides.value = (kpiResponse.totalRides || 0).toLocaleString();
 
-        // (★수정★) 백엔드가 보낸 문자열("88.0")을 .toFixed() 없이 그대로 사용
+        // (★수정★) scoreResponse (전체 기간)에서 1개 KPI 설정
         kpiData.value.safetyScore.value = scoreResponse.averageScore || '0.0';
 
-        // (★수정★) totalRides 계산 (trendResponse가 유효한지 확인)
-        const totalRides = trendResponse?.datasets?.rideCounts?.reduce((a, b) => a + b, 0) || 0;
-        kpiData.value.rides.value = totalRides.toLocaleString();
+        // --- (★수정★) '운행 1건당 평균 위험 건수' 계산 로직 변경 ---
+        const totalRides = kpiResponse.totalRides || 0;
+        const totalRisks = kpiResponse.totalRiskCount || 0;
 
-        // (★수정★) riskRate 계산 (0으로 나누기 방지)
         if (totalRides > 0) {
-            kpiData.value.riskRate.value = ((kpiResponse.totalRiskCount / totalRides) * 100).toFixed(1);
+            kpiData.value.riskRate.value = (totalRisks / totalRides).toFixed(1); // 예: 1.4
         } else {
-            kpiData.value.riskRate.value = '0.0'; // 0.0으로 통일
+            kpiData.value.riskRate.value = '0.0';
         }
+        // --- 계산 수정 완료 ---
     } catch (error) {
         console.error('KPI 데이터 로딩 실패:', error);
         // (★추가★) 실패 시 모든 값을 '오류'로 설정
@@ -321,13 +302,15 @@ const fetchKpiData = async () => {
     }
 };
 
-// KPI 트렌드 (LineChart)
+// KPI 트렌드 (LineChart) - (항상 최근 30일)
 const fetchKpiTrends = async () => {
     try {
-        // (★수정★) params -> apiParams.value
-        const response = await apiClient.get('/admin/stats/kpi-trends', {
-            params: { ...apiParams.value, interval: 'daily' },
-        });
+        const params = {
+            startDate: getPastDate(30),
+            endDate: getToday(),
+            interval: 'daily',
+        };
+        const response = await apiClient.get('/admin/stats/kpi-trends', { params });
         kpiTrendData.value = response;
     } catch (error) {
         console.error('KPI 트렌드 데이터 로딩 실패:', error);
@@ -335,16 +318,16 @@ const fetchKpiTrends = async () => {
     }
 };
 
-// 위험 행동 유형 (PieChart)
-const riskColors = ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6'];
+// (★복원★) 위험 행동 유형 (PieChart) - (전체 기간)
 const fetchRiskTypes = async () => {
     try {
-        const response = await apiClient.get('/admin/stats/risk-types', { params: apiParams.value });
+        // (★수정★) apiParams 제거
+        const response = await apiClient.get('/admin/stats/risk-types');
         riskTypeData.value = response.data.map((item, index) => ({
             name: item.kpiName,
             value: item.percentage,
             count: item.count,
-            color: riskColors[index % riskColors.length],
+            color: riskColors[index % riskColors.length], // (★수정★) riskColors 배열 사용
         }));
     } catch (error) {
         console.error('위험 행동 유형 데이터 로딩 실패:', error);
@@ -355,6 +338,7 @@ const fetchRiskTypes = async () => {
 // "사고 많이 날거 같은 지역" (더미 데이터)
 const fetchTopRegions = async () => {
     try {
+        // (임시 더미 데이터)
         topRegionsData.value = [
             { rank: 1, regionName: '구미역 네거리 (더미)', count: 132 },
             { rank: 2, regionName: '인동 로데오거리 (더미)', count: 105 },
@@ -368,10 +352,11 @@ const fetchTopRegions = async () => {
     }
 };
 
-// 시간대별 위험도 (BarChart)
+// (★복원★) 시간대별 위험도 (BarChart) - (전체 기간)
 const fetchHourlyRisk = async () => {
     try {
-        const response = await apiClient.get('/admin/stats/hourly-risk', { params: apiParams.value });
+        // (★수정★) apiParams 제거
+        const response = await apiClient.get('/admin/stats/hourly-risk');
         timeRiskData.value = response;
     } catch (error) {
         console.error('시간대별 위험도 데이터 로딩 실패:', error);
@@ -379,10 +364,11 @@ const fetchHourlyRisk = async () => {
     }
 };
 
-// (★수정★) 사용자 그룹별 비교 (API 호출)
+// (★복원★) 사용자 그룹별 비교 (API 호출) - (전체 기간)
 const fetchUserGroupComparison = async () => {
     try {
-        const response = await apiClient.get('/admin/stats/user-group-comparison', { params: apiParams.value });
+        // (★수정★) apiParams 제거
+        const response = await apiClient.get('/admin/stats/user-group-comparison');
         userGroupData.value = response.groups;
     } catch (error) {
         console.error('사용자 그룹 비교 데이터 로딩 실패:', error);
@@ -393,6 +379,7 @@ const fetchUserGroupComparison = async () => {
 // "금오공대 주변 동" (더미 데이터)
 const fetchRegionalScores = async () => {
     try {
+        // (임시 더미 데이터)
         regionData.value = [
             { region: '양호동 (더미)', score: 85, trend: '+2' },
             { region: '부곡동 (더미)', score: 78, trend: '-3' },
@@ -406,10 +393,11 @@ const fetchRegionalScores = async () => {
     }
 };
 
-// 안전 점수 분포 (BarChart)
+// (★복원★) 안전 점수 분포 (BarChart) - (전체 기간)
 const fetchSafetyScoreDistribution = async () => {
     try {
-        const response = await apiClient.get('/admin/stats/safety-scores', { params: apiParams.value });
+        // (★수정★) apiParams 제거
+        const response = await apiClient.get('/admin/stats/safety-scores');
         const labels = Object.keys(response.distribution);
         const data = Object.values(response.distribution);
         safetyScoreDistribution.value = { labels, data };
@@ -419,17 +407,8 @@ const fetchSafetyScoreDistribution = async () => {
     }
 };
 
-// '조회' 버튼 클릭 시 (API 호출 목록에 fetchUserGroupComparison 포함)
-const fetchAllStatsData = () => {
-    fetchKpiData();
-    fetchKpiTrends();
-    fetchRiskTypes();
-    // fetchTopRegions(); // (더미)
-    fetchHourlyRisk();
-    fetchSafetyScoreDistribution();
-    fetchUserGroupComparison(); // (★API 호출★)
-    // fetchRegionalScores(); // (더미)
-};
+// (★제거★) '조회' 버튼 클릭 시 함수 제거
+// const fetchAllStatsData = () => { ... };
 
 // (★추가★) 사용자 그룹 차트의 고정된 X축 레이블
 const userGroupLabels = ['신규 사용자', '10회 이상', '100회 이상'];
@@ -585,9 +564,17 @@ const safetyScoreChartOptions = {
     },
 };
 
-// 마운트 시 API 및 더미 데이터 2개 호출
+// (★수정★) 마운트 시 모든 데이터를 한 번에 로드
 onMounted(() => {
-    fetchAllStatsData(); // API 호출 (이 안에 fetchUserGroupComparison 포함)
+    fetchKpiData(); // (전체 기간 7개 KPI)
+    fetchSafetyScoreDistribution(); // (전체 기간 안전 점수 분포)
+
+    fetchKpiTrends(); // (트렌드 차트는 날짜 필터와 무관하게 30일 고정)
+
+    // (★수정★) 날짜 필터와 무관한 차트들도 로드
+    fetchRiskTypes();
+    fetchHourlyRisk();
+    fetchUserGroupComparison();
 
     // (더미 데이터)
     fetchTopRegions();
