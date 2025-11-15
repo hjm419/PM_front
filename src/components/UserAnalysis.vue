@@ -9,7 +9,7 @@
                     <li v-for="user in riskUsers" :key="user.userId">
                         <span class="dot score-bad-dot"></span>
                         <span class="user-name">{{ user.nickname }}</span>
-                        <span class="user-value score-bad-text">평균 {{ user.safetyScore.toFixed(0) }}점</span>
+                        <span class="user-value score-bad-text">안전 점수 : {{ user.safetyScore.toFixed(0) }}점</span>
                     </li>
                 </ul>
                 <div v-else-if="!isLoadingRisk && riskUsers.length === 0" class="no-data">
@@ -39,18 +39,24 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import apiClient from '@/api/index.js';
+// InfoBadge는 더 이상 사용하지 않으므로 제거합니다.
 
 const isLoadingRisk = ref(true);
 const riskUsers = ref([]);
-const isLoadingRiders = ref(true);
-const topRiders = ref([]);
+const isLoadingRiders = ref(true); // (★추가★)
+const topRiders = ref([]); // (★추가★)
 
+/**
+ * 컴포넌트 마운트 시 API 호출
+ */
 onMounted(() => {
     fetchTopRiskUsers();
-    fetchTopRidersToday();
+    fetchTopRidersToday(); // (★추가★)
 });
 
-// "위험 점수 높은 사용자" (Top 5) API 호출
+/**
+ * /api/admin/users/top-risk API 호출
+ */
 const fetchTopRiskUsers = async () => {
     isLoadingRisk.value = true;
     try {
@@ -65,12 +71,16 @@ const fetchTopRiskUsers = async () => {
     }
 };
 
-// "오늘 가장 많이 운행한 사용자" (Top 2) API 호출
+/**
+ * (★수정★)
+ * /api/admin/stats/top-riders-today API 호출 (5명)
+ */
 const fetchTopRidersToday = async () => {
     isLoadingRiders.value = true;
     try {
         const response = await apiClient.get('/admin/stats/top-riders-today');
-        topRiders.value = response; // (백엔드에서 2명만 보냄)
+        // (★수정★) .slice(0, 2) 제거 -> 5명 모두 가져오기
+        topRiders.value = response;
     } catch (error) {
         console.error('오늘의 Top 라이더 로딩 실패:', error);
         topRiders.value = [];
@@ -78,6 +88,8 @@ const fetchTopRidersToday = async () => {
         isLoadingRiders.value = false;
     }
 };
+
+// getScoreVariant 함수는 더 이상 사용하지 않으므로 제거합니다.
 </script>
 
 <style scoped src="@/assets/styles/components/UserAnalysis.css"></style>
