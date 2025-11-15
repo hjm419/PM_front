@@ -74,11 +74,7 @@
 
             <div class="dialog-section">
                 <h3 class="dialog-section-title">위치 지도</h3>
-                <div class="map-placeholder">
-                    <v-icon name="bi-map" class="icon" />
-                    <p>지도 표시 영역</p>
-                    <p>{{ selectedDevice?.location }}</p>
-                </div>
+                <div id="device-detail-map" class="map-placeholder"></div>
             </div>
 
             <div class="dialog-section action-buttons">
@@ -90,7 +86,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+// (★수정★) nextTick 추가
+import { ref, onMounted, computed, nextTick } from 'vue';
 import apiClient from '@/api/index.js';
 import InfoInput from '../ui/InfoInput.vue';
 import InfoButton from '../ui/InfoButton.vue';
@@ -102,6 +99,7 @@ const selectedDevice = ref(null);
 const isLoading = ref(true);
 const allDevices = ref([]);
 const currentSearch = ref('');
+const mapInstance = ref(null); // (★추가★) 지도 인스턴스 ref
 
 const fetchDevices = async () => {
     isLoading.value = true;
@@ -115,7 +113,7 @@ const fetchDevices = async () => {
             return {
                 id: kickboard.pm_id,
                 model: kickboard.model || 'N/A',
-                status: kickboard.pm_status, // 'available', 'in_use' 등 영어 값
+                status: kickboard.pm_status,
                 battery: kickboard.battery,
                 location: `${lat}, ${lng}`,
             };
@@ -139,28 +137,88 @@ const filteredDevices = computed(() => {
     return allDevices.value.filter((device) => device.id.toLowerCase().includes(currentSearch.value.toLowerCase()));
 });
 
-const openDeviceDetail = (device) => {
+/**
+ * (★수정★)
+ * 다이얼로그 열기 (지도 초기화 로직 추가)
+ */
+const openDeviceDetail = async (device) => {
     selectedDevice.value = device;
+    mapInstance.value = null; // 맵 인스턴스 초기화
+
+    // (★추가★) 다이얼로그가 DOM에 렌더링될 때까지 기다림
+    await nextTick();
+
+    // (★추가★) 지도 초기화 함수 호출
+    initDetailMap(device);
+};
+
+/**
+ * (★신규★)
+ * 다이얼로그 내부의 카카오 지도를 초기화하는 함수
+ */
+const initDetailMap = (device) => {
+    const mapContainer = document.getElementById('device-detail-map');
+    if (!mapContainer || !window.kakao || !window.kakao.maps) {
+        console.error('Kakao Maps API가 로드되지 않았거나, 맵 컨테이너를 찾을 수 없습니다.');
+        return;
+    }
+
+    // "35.8244, 128.738" 형식의 문자열을 lat, lng 숫자로 변환
+    const locationParts = device.location.split(', ');
+    const lat = parseFloat(locationParts[0]);
+    const lng = parseFloat(locationParts[1]);
+
+    // 좌표가 유효하지 않은 경우 (N/A, N/A)
+    if (isNaN(lat) || isNaN(lng)) {
+        mapContainer.innerHTML =
+            '<div style="text-align: center; padding-top: 6rem; color: #6b7280;">위치 좌표가 유효하지 않습니다.</div>';
+        return;
+    }
+
+    const devicePosition = new window.kakao.maps.LatLng(lat, lng);
+
+    const mapOption = {
+        center: devicePosition,
+        level: 3, // (확대 레벨)
+        disableDefaultUI: true, // (기본 UI 숨김)
+    };
+
+    // (★수정★) 맵 인스턴스 생성
+    const map = new window.kakao.maps.Map(mapContainer, mapOption);
+    mapInstance.value = map;
+
+    // (★추가★) 지도 확대/축소 컨트롤 추가
+    const zoomControl = new window.kakao.maps.ZoomControl();
+    map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT);
+
+    // (★추가★) 기기 위치에 마커 표시
+    new window.kakao.maps.Marker({
+        map: map,
+        position: devicePosition,
+        title: device.id,
+    });
+
+    // (★추가★) 다이얼로그가 열리면서 지도가 깨질 수 있으므로, relayout을 호출
+    setTimeout(() => {
+        if (map) {
+            map.relayout();
+            map.setCenter(devicePosition);
+        }
+    }, 100); // 0.1초 후 레이아웃 재조정
 };
 
 const closeDialog = () => {
     selectedDevice.value = null;
+    mapInstance.value = null; // (★추가★) 지도 인스턴스 제거
 };
 
 // --- (v1.2 명세서 버튼 API 연동) ---
-
-/**
- * 원격 잠금
- */
 const handleRemoteLock = async () => {
     if (!selectedDevice.value) return;
     if (confirm(`정말로 ${selectedDevice.value.id} 기기를 원격 잠금하시겠습니까?`)) {
         try {
             await apiClient.post(`/admin/kickboards/${selectedDevice.value.id}/lock`);
             alert('기기가 원격 잠금되었습니다.');
-            // (참고: 필요 시 목록 새로고침)
-            // fetchDevices();
-            // closeDialog();
         } catch (error) {
             console.error('원격 잠금 실패:', error);
             alert('원격 잠금에 실패했습니다.');
@@ -168,9 +226,6 @@ const handleRemoteLock = async () => {
     }
 };
 
-/**
- * 수리 중으로 변경 (백엔드에 'maintenance' 전송)
- */
 const handleSetMaintenance = async () => {
     if (!selectedDevice.value) return;
     if (confirm(`정말로 ${selectedDevice.value.id} 기기의 상태를 '수리중'으로 변경하시겠습니까?`)) {
@@ -178,9 +233,7 @@ const handleSetMaintenance = async () => {
             await apiClient.put(`/admin/kickboards/${selectedDevice.value.id}`, {
                 pm_status: 'maintenance',
             });
-
             alert("기기 상태가 'maintenance' (수리중)으로 변경되었습니다.");
-
             fetchDevices();
             closeDialog();
         } catch (error) {
@@ -190,37 +243,28 @@ const handleSetMaintenance = async () => {
     }
 };
 
-/**
- * (★수정★)
- * 백엔드 (영어) 상태 값을 프론트엔드 (한글) 텍스트로 번역
- */
 const translateStatusToKorean = (status) => {
     switch (status) {
         case 'available':
             return '대기';
-        case 'in_use': // (★핵심 수정★) 'in-use' -> 'in_use' (밑줄)
+        case 'in_use':
             return '사용중';
         case 'maintenance':
             return '수리중';
         default:
-            return status; // '수리중' 등 이미 한글이거나 알 수 없는 값
+            return status;
     }
 };
 
-/**
- * (★수정★)
- * 뱃지 색상을 결정하는 로직 (이제 영어 상태 값을 기준으로 함)
- */
 const getStatusVariant = (status) => {
     switch (status) {
-        case 'in_use': // (★핵심 수정★) 'in-use' -> 'in_use' (밑줄)
-            return 'default'; // 파란색
+        case 'in_use':
+            return 'default';
         case 'available':
-            return 'secondary'; // 회색
+            return 'secondary';
         case 'maintenance':
-            return 'destructive'; // 빨간색
+            return 'destructive';
         default:
-            // '수리중'(한글) 값이 DB에 이미 저장된 경우를 대비한 호환 코드
             if (status === '수리중') return 'destructive';
             return 'default';
     }
