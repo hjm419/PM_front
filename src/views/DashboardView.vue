@@ -17,14 +17,19 @@
 
         <section class="bottom-grid">
             <div class="chart-section-card">
-                <h3 class="section-title">법규 준수율 (백엔드 연동 샘플)</h3>
+                <h3 class="section-title">법규 준수율</h3>
 
                 <div class="chart-grid">
-                    <ChartCard :title="chartData.helmet.title" :chartData="chartData.helmet.data" />
+                    <ChartCard
+                        :title="chartData.helmet.title"
+                        :chartData="chartData.helmet.data"
+                        v-if="chartData.helmet.data"
+                    />
                     <ChartCard
                         :title="chartData.road.title"
                         :chartData="chartData.road.data"
                         :chartOptions="chartData.road.options"
+                        v-if="chartData.road.data"
                     />
                 </div>
             </div>
@@ -50,31 +55,56 @@ const kpiData = ref([
     { id: 4, value: '...', label: '운행거리 합계', changeText: '로딩 중...' },
 ]);
 
-// 2. 차트 데이터 (초기값)
+// 2. (★수정★) 차트 데이터 (초기값을 null로 변경)
 const chartData = ref({
     helmet: { title: '월별 평균 안전 점수', data: null },
-    road: { title: '시간대별 총 위험 행동', data: null, options: {} },
+    road: {
+        title: '시간대별 총 위험 행동',
+        data: null,
+        // (★수정★) 'undefined' 범례 오류를 막기 위해 범례(legend)를 숨깁니다.
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false, // 범례 숨기기
+                },
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false,
+                    },
+                },
+                y: {
+                    beginAtZero: true,
+                },
+            },
+            elements: {
+                line: {
+                    tension: 0.4,
+                    backgroundColor: 'rgba(107, 114, 128, 0.1)', // 회색조
+                    borderColor: '#6b7280', // 회색
+                    fill: true,
+                },
+                point: {
+                    radius: 0,
+                },
+            },
+        },
+    },
 });
 
-// 3. 지도 데이터 (임시)
-const pmData = ref([
-    { id: 'PM-101', score: 95, lat: 35.8244, lng: 128.738, status: '운행중' },
-    { id: 'PM-102', score: 42, lat: 35.825, lng: 128.739, status: '배터리 부족' },
-    { id: 'PM-103', score: 15, lat: 35.8235, lng: 128.737, status: '고장' },
-]);
-const pmStats = ref({ total: 3, running: 1, error: 1, lowBattery: 1 });
+// 3. 지도 데이터 (API 연동)
+const pmData = ref([]);
+const pmStats = ref({ total: 0, running: 0, error: 0, available: 0 });
 
 // --- API 호출 함수 ---
 
 // 1. KPI 데이터 로드
 const fetchKpiData = async () => {
-    /* (★수정★)
-     * 새 API 명세서의 'GET /api/admin/stats/kpis'를 호출합니다.
-     */
     try {
-        // (참고: API 명세서에 날짜 파라미터가 있으나, 대시보드는 전체 기간으로 가정)
         const stats = await apiClient.get('/admin/stats/kpis');
-
         if (stats) {
             kpiData.value = [
                 { id: 1, value: `${stats.totalUserCount || 0}명`, label: '누적 이용자 수', changeText: '전체 기간' },
@@ -96,38 +126,35 @@ const fetchKpiData = async () => {
 
 // 2. 차트 데이터 로드
 const fetchChartData = async () => {
-    /* (★수정★)
-     * 새 API 명세서 v1.2에 맞는 API를 호출합니다.
-     */
     try {
         // (1) '월별 평균 안전 점수' (LineChart)
-        // (★수정★) v1.2 명세서의 'GET /api/admin/stats/monthly-safety-scores' 호출
-        const scoreResponse = await apiClient.get('/admin/stats/monthly-safety-scores', {
-            // (참고: 필요 시 params로 날짜 범위 전송)
-        });
+        const scoreResponse = await apiClient.get('/admin/stats/monthly-safety-scores');
 
         if (scoreResponse && scoreResponse.labels && scoreResponse.data) {
+            // (★수정★) data 객체를 직접 할당 (null.labels 오류 수정)
             chartData.value.helmet.data = {
                 labels: scoreResponse.labels,
                 datasets: [
                     {
+                        label: '평균 안전 점수', // (범례용 레이블 추가)
                         data: scoreResponse.data,
+                        // (LineChart.vue 기본 옵션 사용 - 파란색)
                     },
                 ],
             };
         }
 
         // (2) '시간대별 총 위험 행동' (LineChart)
-        // (참고: `GET /api/admin/stats/hourly-risk` API를 호출합니다.)
         const hourlyResponse = await apiClient.get('/admin/stats/hourly-risk');
 
         if (hourlyResponse && hourlyResponse.labels && hourlyResponse.data) {
+            // (★수정★) data 객체를 직접 할당 (null.labels 오류 수정)
             chartData.value.road.data = {
                 labels: hourlyResponse.labels,
                 datasets: [
                     {
+                        label: '총 위험 행동', // (★수정★) 'undefined' 오류 수정을 위해 레이블 추가
                         data: hourlyResponse.data,
-                        // (LineChart.vue 기본 옵션이 파란색 영역형 차트임)
                     },
                 ],
             };
@@ -139,9 +166,52 @@ const fetchChartData = async () => {
     }
 };
 
+// (지도 관련 함수 - 기존과 동일)
+const translateStatus = (pm_status, battery) => {
+    if (pm_status === 'maintenance') return '고장';
+    if (pm_status === 'in_use') return '운행중';
+    return '대기';
+};
+
+const fetchMapData = async () => {
+    try {
+        const response = await apiClient.get('/admin/kickboards');
+        let running = 0;
+        let error = 0;
+        let available = 0;
+
+        const newPmData = response.kickboards.map((pm) => {
+            const status = translateStatus(pm.pm_status, pm.battery);
+            if (status === '운행중') running++;
+            else if (status === '고장') error++;
+            else if (status === '대기') available++;
+
+            return {
+                id: pm.pm_id,
+                lat: pm.location.lat,
+                lng: pm.location.lng,
+                status: status,
+            };
+        });
+
+        pmData.value = newPmData;
+        pmStats.value = {
+            total: response.totalCount || 0,
+            running,
+            error,
+            available,
+        };
+    } catch (error) {
+        console.error('지도 데이터 로딩 실패:', error);
+        pmData.value = [];
+        pmStats.value = { total: 0, running: 0, error: 0, available: 0 };
+    }
+};
+
 onMounted(async () => {
     fetchKpiData();
     fetchChartData();
+    fetchMapData();
 });
 </script>
 

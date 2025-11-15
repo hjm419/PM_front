@@ -19,7 +19,7 @@ defineProps({
     },
     chartData: {
         type: Object,
-        required: false,
+        required: false, // (★수정★) 필수(required)가 아님
     },
     chartOptions: {
         type: Object,

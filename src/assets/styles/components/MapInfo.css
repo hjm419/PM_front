@@ -58,9 +58,14 @@
 .stat-color.red {
     background-color: #ef4444;
 } /* 고장 (빨강) */
+
+/* (★수정★) 'orange' (배터리 부족) 대신 'grey' (대기) 색상 추가 */
 .stat-color.orange {
     background-color: #f59e0b;
-} /* 배터리 부족 (주황) */
+}
+.stat-color.grey {
+    background-color: #9ca3af; /* (★추가★) */
+}
 
 .stat-label {
     font-size: 0.875rem;

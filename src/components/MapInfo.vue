@@ -18,7 +18,7 @@
                     </svg>
                 </button>
                 <div class="map-control-divider"></div>
-                <button class="map-control-btn" @click="goToMyLocation">
+                <button class="map-control-btn" @click="goToMyLocation(false)">
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
@@ -72,9 +72,9 @@
                 <span class="stat-value">{{ pmStats.error }}</span>
             </div>
             <div class="stat-item">
-                <span class="stat-color orange"></span>
-                <span class="stat-label">배터리 부족</span>
-                <span class="stat-value">{{ pmStats.lowBattery }}</span>
+                <span class="stat-color grey"></span>
+                <span class="stat-label">대기</span>
+                <span class="stat-value">{{ pmStats.available }}</span>
             </div>
         </div>
     </div>
@@ -98,10 +98,9 @@ const mapInstance = ref(null);
 const mapLoaded = ref(false);
 const pmOverlays = ref([]);
 
-/**
- * (★수정★)
- * onMounted에서 nextTick을 제거하고 loadMapScript를 바로 호출합니다.
- */
+// (★수정★) 원래 SVG 아이콘으로 복원
+const kickboardSVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M18.5 12H16V9H18.5V12ZM18.15 13C18.6 13 19 13.4 19 13.85C19 14.3 18.6 14.7 18.15 14.7C17.7 14.7 17.3 14.3 17.3 13.85C17.3 13.4 17.7 13 18.15 13ZM6.85 13C7.3 13 7.7 13.4 7.7 13.85C7.7 14.3 7.3 14.7 6.85 14.7C6.4 14.7 6 14.3 6 13.85C6 13.4 6.4 13 6.85 13ZM5.5 12H8V9H5.5V12ZM14.75 16H9.25C9.25 16 9 15.75 9 15.5C9 15.25 9.25 15 9.25 15H14.75C14.75 15 15 15.25 15 15.5C15 15.75 14.75 16 14.75 16ZM19 16.5V18H5V16.5L6.5 15.25H17.5L19 16.5ZM13.5 6.5H10.5L11.25 4H12.75L13.5 6.5Z" /></svg>`;
+
 onMounted(() => {
     loadMapScript();
 });
@@ -116,42 +115,19 @@ watch(
     { deep: true }
 );
 
-/**
- * (★핵심 수정★)
- * autoload=true로 변경했으므로, window.kakao.maps.load()를 호출할 필요가 없습니다.
- * 대신, API가 완전히 로드되어 'Map' 생성자가 정의될 때까지 100ms 간격으로 재시도합니다.
- */
 const loadMapScript = () => {
     if (window.kakao && window.kakao.maps && window.kakao.maps.Map) {
-        // API가 완전히 로드됨 (Map 생성자 확인)
         initMap();
     } else {
-        // 아직 로드되지 않음 (새로고침 경합 상태)
-        setTimeout(loadMapScript, 100); // 100ms 후 재시도
+        setTimeout(loadMapScript, 100);
     }
 };
 
-/**
- * (★수정★)
- * initMap 내부의 nextTick 제거 (이미 onMounted 시점이라 DOM이 준비됨)
- */
 const initMap = () => {
     const mapContainer = document.getElementById('dashboard-map');
     if (!mapContainer || mapInstance.value) return;
 
-    const mapOption = {
-        center: new window.kakao.maps.LatLng(35.8244, 128.738),
-        level: 5,
-        disableDefaultUI: true,
-    };
-
-    mapInstance.value = new window.kakao.maps.Map(mapContainer, mapOption);
-    mapLoaded.value = true;
-
-    mapInstance.value.relayout();
-    if (props.pmData.length > 0) {
-        displayPMsOnMap(props.pmData);
-    }
+    goToMyLocation(true);
 };
 
 const zoomIn = () => {
@@ -164,39 +140,69 @@ const zoomOut = () => {
         mapInstance.value.setLevel(mapInstance.value.getLevel() + 1);
     }
 };
-const goToMyLocation = () => {
-    if (!mapInstance.value) return;
+
+const goToMyLocation = (isInit = false) => {
+    const mapContainer = document.getElementById('dashboard-map');
+    const defaultPosition = new window.kakao.maps.LatLng(35.8244, 128.738);
+
+    const createMap = (centerPosition) => {
+        const mapOption = {
+            center: centerPosition,
+            level: 5,
+            disableDefaultUI: true,
+        };
+        mapInstance.value = new window.kakao.maps.Map(mapContainer, mapOption);
+        mapLoaded.value = true;
+        mapInstance.value.relayout();
+
+        if (props.pmData.length > 0) {
+            displayPMsOnMap(props.pmData);
+        }
+    };
+
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
                 const currentPosition = new window.kakao.maps.LatLng(lat, lng);
-                mapInstance.value.setCenter(currentPosition);
-                mapInstance.value.relayout();
-                new window.kakao.maps.Marker({
-                    map: mapInstance.value,
-                    position: currentPosition,
-                    title: '현재 위치',
-                });
+
+                if (isInit) {
+                    createMap(currentPosition);
+                } else {
+                    mapInstance.value.setCenter(currentPosition);
+                    mapInstance.value.relayout();
+                    new window.kakao.maps.Marker({
+                        map: mapInstance.value,
+                        position: currentPosition,
+                        title: '현재 위치',
+                    });
+                }
             },
             () => {
-                alert('위치 정보를 가져오는 데 실패했습니다.');
+                if (isInit) {
+                    console.warn('Geolocation failed. Defaulting to Gumi.');
+                    createMap(defaultPosition);
+                } else {
+                    alert('위치 정보를 가져오는 데 실패했습니다.');
+                }
             }
         );
     } else {
-        alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
+        if (isInit) {
+            console.warn('Geolocation not supported. Defaulting to Gumi.');
+            createMap(defaultPosition);
+        } else {
+            alert('이 브라우저는 Geolocation을 지원하지 않습니다.');
+        }
     }
 };
 
 const getStatusClass = (status) => {
     if (status === '운행중') return 'status-running';
     if (status === '고장') return 'status-error';
-    if (status === '배터리 부족') return 'status-low-battery';
-    return '';
+    return ''; // '대기' 상태는 기본값(회색) 사용
 };
-
-const kickboardSVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M18.5 12H16V9H18.5V12ZM18.15 13C18.6 13 19 13.4 19 13.85C19 14.3 18.6 14.7 18.15 14.7C17.7 14.7 17.3 14.3 17.3 13.85C17.3 13.4 17.7 13 18.15 13ZM6.85 13C7.3 13 7.7 13.4 7.7 13.85C7.7 14.3 7.3 14.7 6.85 14.7C6.4 14.7 6 14.3 6 13.85C6 13.4 6.4 13 6.85 13ZM5.5 12H8V9H5.5V12ZM14.75 16H9.25C9.25 16 9 15.75 9 15.5C9 15.25 9.25 15 9.25 15H14.75C14.75 15 15 15.25 15 15.5C15 15.75 14.75 16 14.75 16ZM19 16.5V18H5V16.5L6.5 15.25H17.5L19 16.5ZM13.5 6.5H10.5L11.25 4H12.75L13.5 6.5Z" /></svg>`;
 
 const displayPMsOnMap = (pms) => {
     if (!mapInstance.value) return;
@@ -206,7 +212,10 @@ const displayPMsOnMap = (pms) => {
 
     pms.forEach((pm) => {
         const statusClass = getStatusClass(pm.status);
+
+        // (★수정★) <img> 태그 대신 다시 SVG 변수 사용
         const content = `<div class="pm-icon-overlay ${statusClass}">${kickboardSVG}</div>`;
+
         const position = new window.kakao.maps.LatLng(pm.lat, pm.lng);
         const customOverlay = new window.kakao.maps.CustomOverlay({
             position: position,

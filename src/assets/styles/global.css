@@ -36,7 +36,7 @@ body {
     height: 20px;
 }
 
-/* 2. 대시보드용 '상태별' 아이콘 색상 (기존과 동일) */
+/* 2. 대시보드용 '상태별' 아이콘 색상 (★수정★) */
 .pm-icon-overlay.status-running {
     background-color: #3b82f6; /* 파랑 */
     border-color: #2563eb;
@@ -47,11 +47,13 @@ body {
     border-color: #dc2626;
     color: white;
 }
+/* (★제거★) '배터리 부족' 상태 제거 
 .pm-icon-overlay.status-low-battery {
-    background-color: #f59e0b; /* 주황/노랑 */
+    background-color: #f59e0b; 
     border-color: #d97706;
     color: white;
 }
+*/
 
 /* 3. (★새로 추가★) 실시간 관제용 '점수별' 아이콘 색상 */
 

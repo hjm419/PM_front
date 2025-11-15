@@ -30,6 +30,12 @@
     grid-template-columns: 2fr 1fr;
     gap: 24px;
     flex-shrink: 0;
+
+    /* (★핵심 수정★) 
+      그리드 아이템(카드)들이 위쪽을 기준으로 정렬되도록 하여
+      카드가 불필요하게 늘어나는 것을 방지합니다.
+    */
+    align-items: start;
 }
 
 /* (★추가★) 차트 섹션을 감싸는 카드 스타일 */
