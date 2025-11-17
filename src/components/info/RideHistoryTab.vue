@@ -100,7 +100,7 @@
                             <p>{{ rideDetail.userId }}</p>
                         </div>
                         <div>
-                            <p>PM ID (Ride ID)</p>
+                            <p>Ride ID</p>
                             <p>{{ rideDetail.deviceId }}</p>
                         </div>
                         <div>

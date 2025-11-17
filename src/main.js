@@ -29,6 +29,9 @@ import {
 
     // (★수정★) BiXlg -> BiXLg (L이 대문자입니다)
     BiXLg,
+
+    // (★추가★) '지도 확대' 버튼 아이콘
+    BiArrowsFullscreen,
 } from 'oh-vue-icons/icons/bi';
 
 // (★수정★) addIcons에 아이콘들 추가
@@ -54,7 +57,10 @@ addIcons(
     BiFileEarmarkText,
 
     // (★수정★) BiXlg -> BiXLg
-    BiXLg
+    BiXLg,
+
+    // (★추가★)
+    BiArrowsFullscreen
 );
 
 const app = createApp(App);
