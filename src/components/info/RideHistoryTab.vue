@@ -56,7 +56,7 @@
                     >
                         <td class="info-table-cell">{{ ride.date }}</td>
                         <td class="info-table-cell">{{ ride.userId }}</td>
-                        <td class="info-table-cell">{{ ride.deviceId }}</td>
+                        <td class="info-table-cell">{{ ride.pmId }}</td>
                         <td class="info-table-cell">{{ ride.startTime }}</td>
                         <td class="info-table-cell">{{ ride.endTime }}</td>
                         <td class="info-table-cell">{{ ride.score }}</td>
@@ -127,18 +127,37 @@
                 </div>
 
                 <div class="dialog-section">
-                    <h3 class="dialog-section-title">위치 지도 (GPS 경로)</h3>
                     <div
-                        class="map-placeholder"
-                        style="height: 10rem; text-align: left; padding: 1rem; overflow-y: auto"
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 0.75rem;
+                        "
                     >
-                        <div v-if="rideDetail.pathLoading">GPS 경로를 불러오는 중입니다...</div>
-                        <div v-else-if="!rideDetail.pathData || rideDetail.pathData.length === 0">
-                            <p>저장된 GPS 경로 데이터가 없습니다.</p>
+                        <h3 class="dialog-section-title" style="margin-bottom: 0">위치 지도 (GPS 경로)</h3>
+                        <InfoButton variant="outline" size="sm" @click="isMapModalOpen = true">
+                            <template #icon><v-icon name="bi-arrows-fullscreen" /></template>
+                            지도 확대
+                        </InfoButton>
+                    </div>
+
+                    <div
+                        id="ride-detail-map"
+                        class="map-placeholder"
+                        style="height: 16rem; text-align: left; padding: 0; overflow-y: hidden"
+                    >
+                        <div
+                            v-if="rideDetail.pathLoading"
+                            style="text-align: center; padding-top: 6rem; color: #6b7280"
+                        >
+                            GPS 경로를 불러오는 중입니다...
                         </div>
-                        <div v-else>
-                            <p>총 {{ rideDetail.pathData.length }}개의 GPS 포인트가 조회되었습니다.</p>
-                            <pre style="font-size: 0.75rem">{{ rideDetail.pathData[0] }}</pre>
+                        <div
+                            v-else-if="!rideDetail.pathData || rideDetail.pathData.length < 2"
+                            style="text-align: center; padding-top: 6rem; color: #6b7280"
+                        >
+                            <p>저장된 GPS 경로 데이터가 없습니다.</p>
                         </div>
                     </div>
                 </div>
@@ -174,21 +193,28 @@
                 <p>운행 상세 정보를 불러오는 중입니다...</p>
             </div>
         </InfoDialog>
+
+        <MapModal
+            :open="isMapModalOpen"
+            :pathData="rideDetail ? rideDetail.pathData : []"
+            @close="isMapModalOpen = false"
+        />
     </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import apiClient from '@/api/index.js';
 import InfoInput from '../ui/InfoInput.vue';
 import InfoButton from '../ui/InfoButton.vue';
 import InfoDialog from '../ui/InfoDialog.vue';
+import MapModal from '../MapModal.vue'; // (★신규★)
 
 const startDate = ref('');
 const endDate = ref('');
 const userId = ref('');
-const deviceId = ref(''); // (API 명세서의 pmId에 해당)
-const isLoading = ref(true); // (★추가★)
+const deviceId = ref('');
+const isLoading = ref(true);
 
 const rides = ref([]);
 const currentPage = ref(1);
@@ -198,6 +224,8 @@ const ridesPerPage = 10;
 
 const selectedRide = ref(null);
 const rideDetail = ref(null);
+const mapInstance = ref(null);
+const isMapModalOpen = ref(false); // (★신규★)
 
 const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) {
@@ -216,17 +244,11 @@ const formatDateTime = (dateTimeString) => {
     }
 };
 
-/**
- * (★수정★)
- * Mock 데이터 제거, API가 반환하는 helmetOn 사용
- */
 const fetchRides = async (page) => {
     if (page < 1 || (page > totalPages.value && totalRides.value > 0)) {
         return;
     }
-
     isLoading.value = true;
-
     try {
         currentPage.value = page;
         const params = {
@@ -237,29 +259,21 @@ const fetchRides = async (page) => {
             startDate: startDate.value || null,
             endDate: endDate.value || null,
         };
-
         const response = await apiClient.get('/admin/rides', { params });
-
         totalRides.value = response.totalCount || 0;
         totalPages.value = Math.ceil(totalRides.value / ridesPerPage) || 1;
-
         rides.value = response.rides.map((ride) => {
             const startTime = formatDateTime(ride.startTime);
             const endTime = formatDateTime(ride.endTime);
-
             return {
                 date: startTime.date,
                 userId: ride.userId,
                 deviceId: ride.rideId,
+                pmId: ride.pmId,
                 startTime: startTime.time,
                 endTime: endTime.time,
                 score: ride.safetyScore,
-
-                // (★수정★) Mock Data -> Real Data
-                helmetOn: ride.helmetOn, // (API에서 받아온 실제 헬멧 착용 여부)
-
-                // (★수정★) Mock Data 제거 (상세 조회 시 API로 가져옴)
-                // abruptCount: 0,
+                helmetOn: ride.helmetOn,
             };
         });
     } catch (error) {
@@ -272,35 +286,29 @@ const fetchRides = async (page) => {
     }
 };
 
-/**
- * (★수정★)
- * API 응답(totalCount)을 abruptCount에 매핑
- */
 const openRideDetail = async (ride) => {
     selectedRide.value = ride;
-    // (★수정★) pathData, pathLoading 필드 추가 및 abruptCount 초기화
+    mapInstance.value = null;
+    isMapModalOpen.value = false; // (★추가★)
+
     rideDetail.value = {
         ...ride,
         events: [],
         pathData: [],
         pathLoading: true,
-        abruptCount: 0, // (기본값 0)
-    }; // 로딩 시작 (기본 정보 먼저 표시)
+        abruptCount: 0,
+    };
 
     try {
         // 1. 위험 로그 (Risks) API 호출
         const logResponse = await apiClient.get(`/admin/rides/${ride.deviceId}/risks`);
-
         const gpsEvents = logResponse.logs.map((log) => ({
             time: formatDateTime(log.timestamp).time,
             kpiName: log.kpiName,
             locationString: log.location ? `${log.location.lat.toFixed(5)}, ${log.location.lng.toFixed(5)}` : 'N/A',
         }));
-
         rideDetail.value.events = gpsEvents;
-
-        // (★이 줄을 추가★)
-        rideDetail.value.abruptCount = logResponse.totalCount; // (실제 위험 횟수)
+        rideDetail.value.abruptCount = logResponse.totalCount;
     } catch (error) {
         console.error('운행 상세 로그(Risks) 조회 실패:', error);
         rideDetail.value.events = [];
@@ -308,7 +316,7 @@ const openRideDetail = async (ride) => {
     }
 
     try {
-        // 2. (★신규★) GPS 경로 (Path) API 호출
+        // 2. GPS 경로 (Path) API 호출
         const pathResponse = await apiClient.get(`/admin/rides/${ride.deviceId}/path`);
         rideDetail.value.pathData = pathResponse.pathData || [];
     } catch (error) {
@@ -316,12 +324,76 @@ const openRideDetail = async (ride) => {
         rideDetail.value.pathData = [];
     } finally {
         rideDetail.value.pathLoading = false;
+
+        await nextTick();
+        initDetailMap();
     }
+};
+
+/**
+ * (★수정★)
+ * 팝업 내부에 카카오 지도를 생성하고 Polyline을 그리는 함수
+ * (rideDetail.value.pathData를 사용)
+ */
+const initDetailMap = () => {
+    const mapContainer = document.getElementById('ride-detail-map');
+    if (!rideDetail.value || !mapContainer || !window.kakao || !window.kakao.maps || rideDetail.value.pathLoading) {
+        return;
+    }
+
+    if (!rideDetail.value.pathData || rideDetail.value.pathData.length < 2) {
+        return;
+    }
+
+    const linePath = rideDetail.value.pathData.map(
+        (point) => new window.kakao.maps.LatLng(point.location.lat, point.location.lng)
+    );
+
+    const mapOption = {
+        center: linePath[0],
+        level: 5,
+        disableDefaultUI: true,
+    };
+    const map = new window.kakao.maps.Map(mapContainer, mapOption);
+    mapInstance.value = map;
+
+    const polyline = new window.kakao.maps.Polyline({
+        path: linePath,
+        strokeWeight: 5,
+        strokeColor: '#FF0000',
+        strokeOpacity: 0.7,
+        strokeStyle: 'solid',
+    });
+    polyline.setMap(map);
+
+    const bounds = new window.kakao.maps.LatLngBounds();
+    linePath.forEach((latlng) => bounds.extend(latlng));
+    map.setBounds(bounds);
+
+    new window.kakao.maps.Marker({
+        map: map,
+        position: linePath[0],
+        title: '출발',
+    });
+    new window.kakao.maps.Marker({
+        map: map,
+        position: linePath[linePath.length - 1],
+        title: '도착',
+    });
+
+    setTimeout(() => {
+        if (map) {
+            map.relayout();
+            map.setBounds(bounds);
+        }
+    }, 350);
 };
 
 const closeDialog = () => {
     selectedRide.value = null;
     rideDetail.value = null;
+    mapInstance.value = null;
+    isMapModalOpen.value = false; // (★추가★)
 };
 
 onMounted(() => {
