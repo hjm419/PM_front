@@ -26,6 +26,9 @@ import {
     BiAward,
     BiCalendarEvent,
     BiFileEarmarkText,
+
+    // (★수정★) BiXlg -> BiXLg (L이 대문자입니다)
+    BiXLg,
 } from 'oh-vue-icons/icons/bi';
 
 // (★수정★) addIcons에 아이콘들 추가
@@ -48,7 +51,10 @@ addIcons(
     BiShieldCheck,
     BiAward,
     BiCalendarEvent,
-    BiFileEarmarkText
+    BiFileEarmarkText,
+
+    // (★수정★) BiXlg -> BiXLg
+    BiXLg
 );
 
 const app = createApp(App);
