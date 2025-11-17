@@ -1,10 +1,10 @@
 <template>
     <div class="realtime-container">
         <div class="map-wrapper">
-            <RealtimeMap :districts="districts" :users="users" />
+            <RealtimeMap :districts="districts" :kickboards="allKickboards" />
         </div>
 
-        <UserList :users="users" :class="['user-list-panel', { closed: !isListOpen }]" />
+        <UserList :users="activeRides" :class="['user-list-panel', { closed: !isListOpen }]" />
 
         <button
             :class="['list-toggle-button', { 'list-open': isListOpen }]"
@@ -20,10 +20,13 @@
 // (★수정★) onUnmounted 추가
 import { ref, onMounted, onUnmounted } from 'vue';
 import apiClient from '@/api/index.js';
-import UserList from '@/components/UserList.vue';
+import UserList from '@/components/UserList.vue'; // (★복원★)
 import RealtimeMap from '@/components/RealtimeMap.vue';
 
-const users = ref([]);
+// (★수정★) 2개의 데이터 소스 분리
+const activeRides = ref([]); // (UserList용)
+const allKickboards = ref([]); // (RealtimeMap용)
+
 const districts = ref({});
 const isListOpen = ref(true);
 
@@ -53,44 +56,60 @@ const formatDateTime = (dateTimeString) => {
 
 /**
  * (★신규★)
- * API 호출 로직을 별도 함수로 분리
+ * 1. UserList용 '실시간 운행' 목록 API 호출
  */
 const fetchActiveRides = async () => {
     try {
-        // (★수정★) '/api' 중복 제거
         const response = await apiClient.get('/admin/rides/active');
-
-        const mappedUsers = response.kickboards.map((ride) => {
-            const lat = ride.location?.lat || 35.8244; // 기본 위도
-            const lng = ride.location?.lng || 128.738; // 기본 경도
-
-            return {
-                // --- UserList.vue용 필드 ---
-                id: ride.userId,
-                // (★수정★) '운행 시작'용 (포맷된 시간)
-                startTime: formatDateTime(ride.startTime).time,
-                // (★수정★) '경과 시간' 계산용 (원본 시간)
-                endTime: ride.startTime,
-
-                // --- RealtimeMap.vue + UserList.vue 공용 필드 ---
-                score: ride.safetyScore,
-                lat: lat,
-                lng: lng,
-            };
-        });
-
-        users.value = mappedUsers;
+        const mappedRides = response.kickboards.map((ride) => ({
+            id: ride.userId,
+            startTime: formatDateTime(ride.startTime).time,
+            endTime: ride.startTime, // (경과 시간 계산용 원본 데이터)
+            score: ride.safetyScore,
+            lat: ride.location?.lat || 0, // (UserList는 lat/lng 사용 안함)
+            lng: ride.location?.lng || 0, // (UserList는 lat/lng 사용 안함)
+        }));
+        activeRides.value = mappedRides;
     } catch (error) {
-        console.error('실시간 데이터 로딩 실패:', error);
-        users.value = [];
+        console.error('실시간 운행(active rides) 데이터 로딩 실패:', error);
+        activeRides.value = [];
     }
 };
 
-onMounted(() => {
-    fetchActiveRides(); // 1. 페이지 로드 시 즉시 1회 호출
+/**
+ * (★신규★)
+ * 2. RealtimeMap용 '모든 킥보드' 목록 API 호출
+ */
+const fetchAllKickboards = async () => {
+    try {
+        const response = await apiClient.get('/admin/kickboards');
+        const mappedKickboards = response.kickboards.map((kb) => ({
+            id: kb.pm_id,
+            status: kb.pm_status, // 'in_use', 'available', 'maintenance'
+            lat: kb.location?.lat || 35.8244,
+            lng: kb.location?.lng || 128.738,
+        }));
+        allKickboards.value = mappedKickboards;
+    } catch (error) {
+        console.error('실시간 킥보드(all kickboards) 데이터 로딩 실패:', error);
+        allKickboards.value = [];
+    }
+};
 
-    // (★추가★) 2. 15초(15000ms)마다 fetchActiveRides 함수를 반복 호출
-    timer.value = setInterval(fetchActiveRides, 15000);
+/**
+ * (★신규★)
+ * 15초마다 2개의 API를 동시에 호출하는 함수
+ */
+const fetchAllData = () => {
+    fetchActiveRides();
+    fetchAllKickboards();
+};
+
+onMounted(() => {
+    fetchAllData(); // 1. 페이지 로드 시 즉시 1회 호출
+
+    // (★추가★) 2. 15초(15000ms)마다 fetchAllData 함수를 반복 호출
+    timer.value = setInterval(fetchAllData, 15000);
 });
 
 /**
@@ -118,6 +137,7 @@ onUnmounted(() => {
     width: 100%;
     height: 100%;
 }
+/* (★복원★) UserList 패널 스타일 */
 .user-list-panel {
     position: absolute;
     top: 24px;
@@ -131,6 +151,7 @@ onUnmounted(() => {
 .user-list-panel.closed {
     transform: translateX(calc(-100% - 24px));
 }
+/* (★복원★) 토글 버튼 스타일 */
 .list-toggle-button {
     position: absolute;
     top: 24px;

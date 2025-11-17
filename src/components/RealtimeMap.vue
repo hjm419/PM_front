@@ -54,16 +54,13 @@
 
             <div class="map-legend">
                 <div class="legend-item">
-                    <span class="legend-color color-danger"></span><span class="legend-label">0-20점</span>
+                    <span class="legend-color color-high"></span><span class="legend-label">운행중</span>
                 </div>
                 <div class="legend-item">
-                    <span class="legend-color color-low"></span><span class="legend-label">21-60점</span>
+                    <span class="legend-color color-available"></span><span class="legend-label">대기</span>
                 </div>
                 <div class="legend-item">
-                    <span class="legend-color color-mid"></span><span class="legend-label">61-80점</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-color color-high"></span><span class="legend-label">81-100점</span>
+                    <span class="legend-color color-danger"></span><span class="legend-label">고장</span>
                 </div>
             </div>
         </div>
@@ -75,58 +72,67 @@ import { ref, onMounted, watch } from 'vue';
 
 const props = defineProps({
     districts: { type: Object, required: true },
-    users: { type: Array, required: true },
+    // (★수정★) users -> kickboards
+    kickboards: { type: Array, required: true },
 });
 
 const mapInstance = ref(null);
 const mapLoaded = ref(false);
 const pmOverlays = ref([]);
 
+// (기존) 킥보드 SVG 아이콘 (원본)
 const kickboardSVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M18.5 12H16V9H18.5V12ZM18.15 13C18.6 13 19 13.4 19 13.85C19 14.3 18.6 14.7 18.15 14.7C17.7 14.7 17.3 14.3 17.3 13.85C17.3 13.4 17.7 13 18.15 13ZM6.85 13C7.3 13 7.7 13.4 7.7 13.85C7.7 14.3 7.3 14.7 6.85 14.7C6.4 14.7 6 14.3 6 13.85C6 13.4 6.4 13 6.85 13ZM5.5 12H8V9H5.5V12ZM14.75 16H9.25C9.25 16 9 15.75 9 15.5C9 15.25 9.25 15 9.25 15H14.75C14.75 15 15 15.25 15 15.5C15 15.75 14.75 16 14.75 16ZM19 16.5V18H5V16.5L6.5 15.25H17.5L19 16.5ZM13.5 6.5H10.5L11.25 4H12.75L13.5 6.5Z" /></svg>`;
 
-/**
- * (★수정★)
- * onMounted에서 nextTick을 제거하고 loadMapScript를 바로 호출합니다.
- */
 onMounted(() => {
     loadMapScript();
 });
 
 watch(
-    () => props.users,
-    (newUsers) => {
-        if (mapLoaded.value && newUsers.length > 0) {
-            displayPMsOnMap(newUsers);
+    () => props.kickboards,
+    (newKickboards) => {
+        // (★수정★) 맵이 로드되었고, 킥보드 데이터가 1개 이상 있을 때만 실행
+        if (mapLoaded.value && newKickboards.length > 0) {
+            // 1. 마커를 그립니다.
+            displayPMsOnMap(newKickboards);
+
+            // 2. (★핵심 수정★) 모든 킥보드를 포함하는 경계(Bounds)를 계산합니다.
+            const bounds = new window.kakao.maps.LatLngBounds();
+            newKickboards.forEach((kb) => {
+                // (★추가★) 유효한 좌표만 경계에 포함
+                if (kb.lat && kb.lng) {
+                    bounds.extend(new window.kakao.maps.LatLng(kb.lat, kb.lng));
+                }
+            });
+
+            // 3. (★핵심 수정★) 계산된 경계(Bounds)로 지도의 중심과 줌 레벨을 자동 설정합니다.
+            if (mapInstance.value) {
+                mapInstance.value.setBounds(bounds);
+            }
+        }
+        // (★추가★) 킥보드 데이터가 0개이면 (예: 운행중 목록 0개) 마커만 지웁니다.
+        else if (mapLoaded.value) {
+            displayPMsOnMap([]);
         }
     },
     { deep: true }
 );
 
-/**
- * (★핵심 수정★)
- * autoload=true로 변경했으므로, window.kakao.maps.load()를 호출할 필요가 없습니다.
- * 대신, API가 완전히 로드되어 'Map' 생성자가 정의될 때까지 100ms 간격으로 재시도합니다.
- */
 const loadMapScript = () => {
     if (window.kakao && window.kakao.maps && window.kakao.maps.Map) {
-        // API가 완전히 로드됨 (Map 생성자 확인)
         initMap();
     } else {
-        // 아직 로드되지 않음 (새로고침 경합 상태)
-        setTimeout(loadMapScript, 100); // 100ms 후 재시도
+        setTimeout(loadMapScript, 100);
     }
 };
 
-/**
- * (★수정★)
- * initMap 내부의 nextTick 제거 (이미 onMounted 시점이라 DOM이 준비됨)
- */
 const initMap = () => {
     const mapContainer = document.getElementById('realtime-map');
     if (!mapContainer || mapInstance.value) return;
 
+    // (★수정★) 처음 지도를 생성할 때는 기본 위치로 설정합니다.
+    // (watch에서 킥보드 데이터가 들어오면 어차피 중심으로 이동합니다)
     const mapOption = {
-        center: new window.kakao.maps.LatLng(35.8244, 128.738), // 기본 중심 (경산시)
+        center: new window.kakao.maps.LatLng(35.8244, 128.738),
         level: 5,
         disableDefaultUI: true,
     };
@@ -135,9 +141,7 @@ const initMap = () => {
     mapLoaded.value = true;
     mapInstance.value.relayout();
 
-    if (props.users.length > 0) {
-        displayPMsOnMap(props.users);
-    }
+    // (★제거★) initMap에서는 마커를 그리지 않습니다. (watch에서 처리)
 };
 
 const zoomIn = () => {
@@ -152,6 +156,7 @@ const zoomOut = () => {
     }
 };
 
+// (★수정★) '내 위치' 버튼은 경계(Bounds) 계산 대신 '내 위치'로 이동
 const goToMyLocation = () => {
     if (!mapInstance.value) {
         alert('지도가 아직 로드되지 않았습니다.');
@@ -163,8 +168,12 @@ const goToMyLocation = () => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
                 const currentPosition = new window.kakao.maps.LatLng(lat, lng);
+
+                // (★수정★) setBounds가 아닌 setCenter로 '내 위치'로 이동
                 mapInstance.value.setCenter(currentPosition);
+                mapInstance.value.setLevel(4); // (내 위치는 확대)
                 mapInstance.value.relayout();
+
                 new window.kakao.maps.Marker({
                     map: mapInstance.value,
                     position: currentPosition,
@@ -180,22 +189,29 @@ const goToMyLocation = () => {
     }
 };
 
-const getScoreColorClass = (score) => {
-    if (score >= 81) return 'high';
-    if (score >= 61) return 'mid';
-    if (score >= 21) return 'low';
-    return 'danger';
+/**
+ * (★수정★)
+ * getScoreColorClass -> getStatusColorClass
+ * (global.css의 상태별 마커 스타일을 사용합니다)
+ */
+const getStatusColorClass = (status) => {
+    if (status === 'in_use') return 'status-running'; // (파랑)
+    if (status === 'maintenance') return 'status-error'; // (빨강)
+    return ''; // (대기 'available'은 기본 회색)
 };
 
-const displayPMsOnMap = (users) => {
+const displayPMsOnMap = (kickboards) => {
     if (!mapInstance.value) return;
     pmOverlays.value.forEach((overlay) => overlay.setMap(null));
     pmOverlays.value = [];
-    users.forEach((user) => {
-        const scoreClass = getScoreColorClass(user.score);
-        const content = `<div class="pm-icon-overlay ${scoreClass}">${kickboardSVG}</div>`;
 
-        const position = new window.kakao.maps.LatLng(user.lat, user.lng);
+    // (★수정★) users -> kickboards
+    kickboards.forEach((kb) => {
+        // (★수정★) getScoreColorClass -> getStatusColorClass
+        const statusClass = getStatusColorClass(kb.status);
+        const content = `<div class="pm-icon-overlay ${statusClass}">${kickboardSVG}</div>`;
+
+        const position = new window.kakao.maps.LatLng(kb.lat, kb.lng);
         const customOverlay = new window.kakao.maps.CustomOverlay({
             position: position,
             content: content,

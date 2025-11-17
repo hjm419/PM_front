@@ -1,87 +1,68 @@
-/*
- * .map-container는 RealtimeMap.vue 컴포넌트의 루트 요소입니다.
- * 부모 그리드 셀(RealtimeView.vue)의 100% 높이를 차지해야 합니다.
- */
 .map-container {
-    background-color: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-    position: relative;
+    width: 100%;
     height: 100%;
+    position: relative;
 }
 
 .map-view {
     width: 100%;
     height: 100%;
-    background-color: #f3f4f6;
-    border-radius: 12px;
-    overflow: hidden;
-    position: relative;
 }
 
-/* (★삭제★) 드롭다운 관련 스타일 제거 */
-/*
-.region-dropdowns { ... }
-.region-dropdowns select { ... }
-*/
-
-/* 범례를 맵 안으로 이동 (하단 중앙) */
+/* (★수정★) 범례 스타일 수정 */
 .map-legend {
     position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 24px;
+    right: 24px;
     z-index: 10;
-
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-
     background-color: rgba(255, 255, 255, 0.9);
-    padding: 8px 16px;
+    padding: 12px 16px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column; /* (★수정★) 세로 정렬 */
+    gap: 8px; /* (★수정★) 아이템 간 간격 */
 }
+
 .legend-item {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
-.legend-label {
-    font-size: 0.75rem;
-    color: #4b5563;
-    font-weight: 500;
-}
+
 .legend-color {
-    width: 12px;
-    height: 12px;
-    border-radius: 2px;
-}
-.color-danger {
-    background-color: #ef4444;
-}
-.color-low {
-    background-color: #f59e0b;
-}
-.color-mid {
-    background-color: #34d399; /* 초록색 */
-}
-.color-high {
-    background-color: #3b82f6;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-/* (★삭제★) 장비등록 버튼 관련 스타일 제거 */
-/*
-.register-pm-btn { ... }
-.register-pm-btn:hover { ... }
-*/
+.legend-label {
+    font-size: 0.875rem; /* 14px */
+    font-weight: 500;
+    color: #374151;
+}
 
-/* 맵 컨트롤 - 맵(.map-view)의 우측 하단 */
+/* (★수정★) 상태별 색상 (global.css의 마커 색상과 일치) */
+.legend-color.color-high {
+    background-color: #3b82f6; /* 운행중 (파랑) */
+    border-color: #2563eb;
+}
+.legend-color.color-available {
+    background-color: #ffffff; /* 대기 (흰색 바탕) */
+    border-color: #9ca3af; /* 회색 테두리 */
+}
+.legend-color.color-danger {
+    background-color: #ef4444; /* 고장 (빨강) */
+    border-color: #dc2626;
+}
+/* (★제거★) .color-low, .color-mid 제거 */
+
+/* (기존) 맵 컨트롤 스타일 */
 .map-controls {
     position: absolute;
-    bottom: 16px;
-    right: 16px;
+    bottom: 24px;
+    right: 24px;
     z-index: 10;
     display: flex;
     flex-direction: column;
