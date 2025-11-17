@@ -40,13 +40,26 @@
     padding: 16px;
     margin-bottom: 12px;
 }
-/* ... (user-id ~ score-bar 스타일은 기존과 동일) ... */
-.user-id {
+
+/* (★신규★) '사용자 ID' 라벨과 값을 감싸는 래퍼 */
+.user-id-wrapper {
+    margin-bottom: 16px;
+}
+/* (★신규★) 라벨 상속 (info-label 재사용) */
+.user-id-wrapper .info-label {
+    color: #6b7280;
+    margin-bottom: 4px;
+    display: block;
+    font-size: 0.875rem;
+}
+/* (★수정★) .user-id -> .user-id-value */
+.user-id-value {
     font-size: 1.125rem;
     font-weight: 600;
     color: #111827;
-    margin-bottom: 16px;
 }
+
+/* ... (info-grid ~ score-bar 스타일은 기존과 동일) ... */
 .info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

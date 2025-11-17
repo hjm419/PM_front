@@ -10,15 +10,19 @@
 
         <ul class="user-list" v-if="paginatedUsers.length > 0">
             <li class="user-item" v-for="user in paginatedUsers" :key="user.id">
-                <div class="user-id">{{ user.id }}</div>
+                <div class="user-id-wrapper">
+                    <span class="info-label">사용자 ID</span>
+                    <div class="user-id-value">{{ user.id }}</div>
+                </div>
+
                 <div class="info-grid">
                     <div class="info-item">
                         <span class="info-label">운행 시작</span>
                         <span class="info-value">{{ user.startTime }}</span>
                     </div>
                     <div class="info-item">
-                        <span class="info-label">운행 종료</span>
-                        <span class="info-value">{{ user.endTime }}</span>
+                        <span class="info-label">경과 시간</span>
+                        <span class="info-value">{{ getElapsedTime(user.endTime) }}</span>
                     </div>
                 </div>
 
@@ -67,8 +71,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
-// (★수정★) 올바른 상대 경로로 변경 (../ui/ -> ./ui/)
+// (★수정★) onMounted, onUnmounted 추가
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import InfoInput from './ui/InfoInput.vue';
 import InfoButton from './ui/InfoButton.vue';
 
@@ -79,12 +83,59 @@ const props = defineProps({
     },
 });
 
-// (★추가★) 검색 및 페이지네이션 상태
+// --- (★추가★) 경과 시간 계산용 타이머 ---
+const now = ref(new Date());
+const timer = ref(null);
+
+onMounted(() => {
+    // 1초마다 '현재 시간(now)'을 갱신하는 타이머 시작
+    timer.value = setInterval(() => {
+        now.value = new Date();
+    }, 1000);
+});
+
+onUnmounted(() => {
+    // 컴포넌트 파괴 시 타이머 정리
+    if (timer.value) {
+        clearInterval(timer.value);
+    }
+});
+
+/**
+ * (★핵심 수정★)
+ * 시작 시간(ISO 문자열)을 받아 "XX분 째" 또는 "X시간 XX분 째"로 반환
+ */
+const getElapsedTime = (startTimeString) => {
+    if (!startTimeString) return 'N/A';
+    try {
+        const start = new Date(startTimeString);
+        // now.value (현재시간) - start (시작시간)
+        const diffMs = now.value.getTime() - start.getTime();
+        if (diffMs < 0) return '0분 째';
+
+        // 1. 총 경과 시간 (분 단위)
+        const totalMinutes = Math.floor(diffMs / 60000); // (diffMs / 1000 / 60)
+
+        if (totalMinutes < 60) {
+            // 2. 60분 미만: "XX분 째"
+            return `${totalMinutes}분 째`;
+        } else {
+            // 3. 60분 이상: "X시간 XX분 째"
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return `${hours}시간 ${minutes}분 째`;
+        }
+    } catch (e) {
+        return 'Error';
+    }
+};
+// --- 타이머 로직 끝 ---
+
+// --- (기존) 검색 및 페이지네이션 ---
 const searchTerm = ref('');
 const currentPage = ref(1);
-const usersPerPage = 5; // 한 페이지에 5명씩 표시
+const usersPerPage = 5;
 
-// (★추가★) 부모 props가 바뀌면(데이터 새로고침) 1페이지로 리셋
 watch(
     () => props.users,
     () => {
@@ -92,38 +143,32 @@ watch(
     }
 );
 
-// (★추가★) 1. 검색어로 사용자 필터링
 const filteredUsers = computed(() => {
     if (!searchTerm.value) {
         return props.users;
     }
-    return props.users.filter((user) => user.id.toLowerCase().includes(searchTerm.value.toLowerCase()));
+    // (★수정★) user.id가 숫자일 수 있으므로 문자열로 변환하여 검색
+    return props.users.filter((user) => String(user.id).toLowerCase().includes(searchTerm.value.toLowerCase()));
 });
 
-// (★추가★) 2. 필터링된 결과로 총 페이지 수 계산
 const totalUsers = computed(() => filteredUsers.value.length);
 const totalPages = computed(() => Math.ceil(totalUsers.value / usersPerPage) || 1);
 
-// (★추가★) 3. 현재 페이지에 표시할 사용자 목록 계산
 const paginatedUsers = computed(() => {
-    // 페이지가 바뀌면 검색 결과도 리셋 (사용자 경험 개선)
     if (currentPage.value > totalPages.value) {
         currentPage.value = 1;
     }
-
     const start = (currentPage.value - 1) * usersPerPage;
     const end = start + usersPerPage;
     return filteredUsers.value.slice(start, end);
 });
 
-// (★추가★) 페이지 이동 함수
 const goToPage = (page) => {
     if (page >= 1 && page <= totalPages.value) {
         currentPage.value = page;
     }
 };
 
-// (기존) 점수 색상 계산
 const getScoreColor = (score) => {
     if (score >= 81) return 'high';
     if (score >= 61) return 'mid';

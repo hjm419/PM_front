@@ -17,40 +17,63 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+// (★수정★) onUnmounted 추가
+import { ref, onMounted, onUnmounted } from 'vue';
 import apiClient from '@/api/index.js';
 import UserList from '@/components/UserList.vue';
 import RealtimeMap from '@/components/RealtimeMap.vue';
 
 const users = ref([]);
 const districts = ref({});
-
 const isListOpen = ref(true);
 
-onMounted(async () => {
-    try {
-        // (★수정★)
-        // API 경로: /api/kickboards -> /api/admin/kickboards
-        // API 명세서의 Query Params (page, size, status 등)를 사용할 수 있으나,
-        // 여기서는 모든 킥보드를 가져오기 위해 param 없이 호출합니다.
-        const response = await apiClient.get('/admin/kickboards');
+// (★추가★) 자동 새로고침 타이머 ID
+const timer = ref(null);
 
-        // (★수정★)
-        // API 명세서 응답(response.kickboards)을 프론트엔드 'users' prop 형식으로 매핑합니다.
-        const mappedUsers = response.kickboards.map((kickboard) => {
-            // API 응답의 location 객체 (예: { lat: 37.5, lng: 127.5 }) 또는
-            // DB 스키마의 GeoPoint를 파싱해야 함 (여기서는 객체로 가정)
-            const lat = kickboard.location?.lat || 35.8244; // 기본 위도
-            const lng = kickboard.location?.lng || 128.738; // 기본 경도
+/**
+ * (★신규★)
+ * 날짜 포맷팅 헬퍼 (RideHistoryTab에서 가져옴)
+ */
+const formatDateTime = (dateTimeString) => {
+    if (!dateTimeString) {
+        return { date: 'N/A', time: 'N/A' };
+    }
+    try {
+        const dateObj = new Date(dateTimeString);
+        if (isNaN(dateObj.getTime())) {
+            return { date: 'Invalid Date', time: 'Invalid Date' };
+        }
+        const date = dateObj.toISOString().split('T')[0];
+        const time = dateObj.toTimeString().split(' ')[0];
+        return { date, time };
+    } catch (e) {
+        return { date: 'N/A', time: 'N/A' };
+    }
+};
+
+/**
+ * (★신규★)
+ * API 호출 로직을 별도 함수로 분리
+ */
+const fetchActiveRides = async () => {
+    try {
+        // (★수정★) '/api' 중복 제거
+        const response = await apiClient.get('/admin/rides/active');
+
+        const mappedUsers = response.kickboards.map((ride) => {
+            const lat = ride.location?.lat || 35.8244; // 기본 위도
+            const lng = ride.location?.lng || 128.738; // 기본 경도
 
             return {
-                // UserList.vue용 필드
-                id: kickboard.pm_id, // ⬅️ 수정
-                startTime: kickboard.pm_status, // ⬅️ 수정
-                endTime: '', // 사용하지 않음
+                // --- UserList.vue용 필드 ---
+                id: ride.userId,
+                // (★수정★) '운행 시작'용 (포맷된 시간)
+                startTime: formatDateTime(ride.startTime).time,
+                // (★수정★) '경과 시간' 계산용 (원본 시간)
+                endTime: ride.startTime,
 
-                // RealtimeMap.vue + UserList.vue 공용 필드
-                score: kickboard.battery, // (battery)
+                // --- RealtimeMap.vue + UserList.vue 공용 필드 ---
+                score: ride.safetyScore,
                 lat: lat,
                 lng: lng,
             };
@@ -59,7 +82,24 @@ onMounted(async () => {
         users.value = mappedUsers;
     } catch (error) {
         console.error('실시간 데이터 로딩 실패:', error);
-        users.value = []; // 실패 시 빈 배열로 설정
+        users.value = [];
+    }
+};
+
+onMounted(() => {
+    fetchActiveRides(); // 1. 페이지 로드 시 즉시 1회 호출
+
+    // (★추가★) 2. 15초(15000ms)마다 fetchActiveRides 함수를 반복 호출
+    timer.value = setInterval(fetchActiveRides, 15000);
+});
+
+/**
+ * (★신규★)
+ * 페이지를 떠날 때(컴포넌트가 파괴될 때) 타이머를 정리(제거)
+ */
+onUnmounted(() => {
+    if (timer.value) {
+        clearInterval(timer.value);
     }
 });
 </script>
