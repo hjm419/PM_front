@@ -5,7 +5,7 @@ import { createPinia } from 'pinia';
 
 import { OhVueIcon, addIcons } from 'oh-vue-icons';
 
-// (★수정★) BiList 및 통계 페이지 아이콘 추가
+// (★수정★) BiGear 추가
 import {
     BiGrid,
     BiDisplay,
@@ -14,9 +14,7 @@ import {
     BiSearch,
     BiMap,
     BiBoxArrowRight,
-    BiList, // (기존 추가됨)
-
-    // (★추가★) 통계 페이지 아이콘
+    BiList,
     BiPeople,
     BiCursor,
     BiActivity,
@@ -26,15 +24,12 @@ import {
     BiAward,
     BiCalendarEvent,
     BiFileEarmarkText,
-
-    // (★수정★) BiXlg -> BiXLg (L이 대문자입니다)
     BiXLg,
-
-    // (★추가★) '지도 확대' 버튼 아이콘
     BiArrowsFullscreen,
+    BiGear, // (★추가★) 설정 아이콘
 } from 'oh-vue-icons/icons/bi';
 
-// (★수정★) addIcons에 아이콘들 추가
+// (★수정★) addIcons에 BiGear 추가
 addIcons(
     BiGrid,
     BiDisplay,
@@ -45,7 +40,6 @@ addIcons(
     BiBoxArrowRight,
     BiList,
 
-    // (★추가★)
     BiPeople,
     BiCursor,
     BiActivity,
@@ -55,12 +49,10 @@ addIcons(
     BiAward,
     BiCalendarEvent,
     BiFileEarmarkText,
-
-    // (★수정★) BiXlg -> BiXLg
     BiXLg,
+    BiArrowsFullscreen,
 
-    // (★추가★)
-    BiArrowsFullscreen
+    BiGear // (★추가★)
 );
 
 const app = createApp(App);

@@ -4,6 +4,7 @@
             <h1 class="page-title">{{ pageTitle }}</h1>
             <span class="date-info">{{ currentDate }}</span>
         </div>
+
         <div class="header-right">
             <div class="notification-wrapper">
                 <button class="icon-button" @click="toggleDropdown">
@@ -24,7 +25,6 @@
                         {{ notificationStore.totalCount }}
                     </span>
                 </button>
-
                 <NotificationDropdown v-if="isDropdownOpen" @close="isDropdownOpen = false" />
             </div>
 
@@ -43,6 +43,10 @@
                     />
                 </svg>
             </router-link>
+
+            <button class="icon-button" @click="openSettings">
+                <v-icon name="bi-gear" />
+            </button>
         </div>
     </header>
 </template>
@@ -50,8 +54,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { useNotificationStore } from '@/stores/notification.store.js'; // (★추가★)
-import NotificationDropdown from './NotificationDropdown.vue'; // (★추가★)
+import { useNotificationStore } from '@/stores/notification.store.js';
+import NotificationDropdown from './NotificationDropdown.vue';
+import { useSettingsStore } from '@/stores/settings.store.js'; // (★)
 
 const currentDate = ref('');
 let intervalId = null;
@@ -82,34 +87,36 @@ const getFormattedDate = () => {
     currentDate.value = `${year}.${month}.${day} 기준`;
 };
 
-// --- (★추가★) 알림 드롭다운 로직 ---
+// --- (1) 알림 드롭다운 로직 (기존) ---
 const notificationStore = useNotificationStore();
 const isDropdownOpen = ref(false);
 
 const toggleDropdown = () => {
     isDropdownOpen.value = !isDropdownOpen.value;
     if (isDropdownOpen.value) {
-        // (★) 드롭다운을 열 때 '읽음'으로 처리
         notificationStore.markAsRead();
     }
 };
 
-// (★) 외부 클릭 시 드롭다운 닫기
+// --- (2) 설정 모달 로직 (기존) ---
+const settingsStore = useSettingsStore();
+const openSettings = () => {
+    settingsStore.openSettingsModal();
+};
+
+// (★) 외부 클릭 시 드롭다운 닫기 (기존)
 const closeDropdownOnClickOutside = (event) => {
+    // 알림 버튼 래퍼가 아니면
     if (!event.target.closest('.notification-wrapper')) {
         isDropdownOpen.value = false;
     }
 };
-// --- (★추가 끝★) ---
 
 onMounted(() => {
     getFormattedDate();
     intervalId = setInterval(getFormattedDate, 60000);
 
-    // (★추가★) 컴포넌트 마운트 시 t_ride 사고 이력 불러오기
     notificationStore.fetchNotifications();
-
-    // (★추가★) 외부 클릭 리스너 등록
     document.addEventListener('click', closeDropdownOnClickOutside);
 });
 
@@ -117,7 +124,6 @@ onUnmounted(() => {
     if (intervalId) {
         clearInterval(intervalId);
     }
-    // (★추가★) 리스너 제거
     document.removeEventListener('click', closeDropdownOnClickOutside);
 });
 </script>
