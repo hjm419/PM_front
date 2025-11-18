@@ -9,10 +9,37 @@
         </div>
 
         <ul class="user-list" v-if="paginatedUsers.length > 0">
-            <li class="user-item" v-for="user in paginatedUsers" :key="user.id">
+            <li
+                class="user-item"
+                v-for="user in paginatedUsers"
+                :key="user.rideId"
+                :class="{ 'has-accident': user.accident }"
+            >
+                <button
+                    v-if="user.accident && user.isCompleted"
+                    class="accident-dismiss-btn"
+                    title="목록에서 지우기"
+                    @click.stop="$emit('dismiss-accident', user.rideId)"
+                >
+                    <v-icon name="bi-x-lg" scale="0.8" />
+                </button>
+
                 <div class="user-id-wrapper">
-                    <span class="info-label">사용자 ID</span>
-                    <div class="user-id-value">{{ user.id }}</div>
+                    <div class="id-grid">
+                        <div class="id-item">
+                            <span class="info-label">사용자 ID</span>
+                            <div class="user-id-value">
+                                {{ user.id }}
+                                <span v-if="user.accident" class="accident-badge">🚨 사고 발생</span>
+                            </div>
+                        </div>
+                        <div class="id-item">
+                            <span class="info-label">킥보드 ID (PM ID)</span>
+                            <div class="user-id-value pm-id-value">
+                                {{ user.pmId }}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="info-grid">
@@ -22,7 +49,9 @@
                     </div>
                     <div class="info-item">
                         <span class="info-label">경과 시간</span>
-                        <span class="info-value">{{ getElapsedTime(user.endTime) }}</span>
+                        <span class="info-value">{{
+                            getElapsedTime(user.elapsedTimeBase, user.isCompleted, user.accident)
+                        }}</span>
                     </div>
                 </div>
 
@@ -71,10 +100,12 @@
 </template>
 
 <script setup>
-// (★수정★) onMounted, onUnmounted 추가
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import InfoInput from './ui/InfoInput.vue';
 import InfoButton from './ui/InfoButton.vue';
+
+// (★신규★) 부모에게 이벤트를 전달하기 위해 defineEmits 선언
+defineEmits(['dismiss-accident']);
 
 const props = defineProps({
     users: {
@@ -83,19 +114,17 @@ const props = defineProps({
     },
 });
 
-// --- (★추가★) 경과 시간 계산용 타이머 ---
+// --- 경과 시간 계산용 타이머 ---
 const now = ref(new Date());
 const timer = ref(null);
 
 onMounted(() => {
-    // 1초마다 '현재 시간(now)'을 갱신하는 타이머 시작
     timer.value = setInterval(() => {
         now.value = new Date();
     }, 1000);
 });
 
 onUnmounted(() => {
-    // 컴포넌트 파괴 시 타이머 정리
     if (timer.value) {
         clearInterval(timer.value);
     }
@@ -103,14 +132,25 @@ onUnmounted(() => {
 
 /**
  * (★핵심 수정★)
- * 시작 시간(ISO 문자열)을 받아 "XX분 째" 또는 "X시간 XX분 째"로 반환
+ * '운행 종료' 상태를 isCompleted 플래그로 명확하게 판단합니다.
  */
-const getElapsedTime = (startTimeString) => {
+const getElapsedTime = (startTimeString, isCompleted, isAccident) => {
     if (!startTimeString) return 'N/A';
+
+    // (★수정★) "운행 종료 (사고)"를 최우선으로 체크
+    if (isAccident && isCompleted) {
+        return '운행 종료 (사고)';
+    }
+    // (★수정★) 일반 종료도 체크
+    if (isCompleted) {
+        return '운행 종료';
+    }
+
     try {
         const start = new Date(startTimeString);
         // now.value (현재시간) - start (시작시간)
         const diffMs = now.value.getTime() - start.getTime();
+
         if (diffMs < 0) return '0분 째';
 
         // 1. 총 경과 시간 (분 단위)
@@ -147,7 +187,6 @@ const filteredUsers = computed(() => {
     if (!searchTerm.value) {
         return props.users;
     }
-    // (★수정★) user.id가 숫자일 수 있으므로 문자열로 변환하여 검색
     return props.users.filter((user) => String(user.id).toLowerCase().includes(searchTerm.value.toLowerCase()));
 });
 

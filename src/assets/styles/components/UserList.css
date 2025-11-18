@@ -17,15 +17,11 @@
     flex-shrink: 0;
 }
 
-/* (★추가★) 검색창 래퍼 */
 .search-bar-wrapper {
     padding: 0 4px 16px 4px;
     flex-shrink: 0;
 }
 
-/* ul 태그가 부모의 남은 공간을 모두 차지하고(flex-grow: 1),
-  내용이 넘칠 경우(overflow-y: auto) 스크롤바를 생성합니다.
-*/
 .user-list {
     list-style: none;
     padding: 0;
@@ -39,27 +35,41 @@
     border-radius: 8px;
     padding: 16px;
     margin-bottom: 12px;
+    position: relative; /* (★수정★) "X" 버튼의 위치 기준 */
 }
 
-/* (★신규★) '사용자 ID' 라벨과 값을 감싸는 래퍼 */
 .user-id-wrapper {
     margin-bottom: 16px;
 }
-/* (★신규★) 라벨 상속 (info-label 재사용) */
 .user-id-wrapper .info-label {
     color: #6b7280;
     margin-bottom: 4px;
     display: block;
     font-size: 0.875rem;
 }
-/* (★수정★) .user-id -> .user-id-value */
 .user-id-value {
     font-size: 1.125rem;
     font-weight: 600;
     color: #111827;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
-/* ... (info-grid ~ score-bar 스타일은 기존과 동일) ... */
+/* (★신규★) 사용자 ID와 PM ID를 2열로 나누는 그리드 */
+.id-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* (★신규★) PM ID 텍스트는 사용자 ID보다 약간 작게 */
+.user-id-value.pm-id-value {
+    font-size: 1.05rem; /* 폰트 크기 살짝 줄임 */
+    color: #374151; /* 폰트 색상 살짝 연하게 */
+    font-weight: 500;
+}
+
 .info-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -138,7 +148,6 @@
     background-color: #ef4444;
 }
 
-/* (★수정★) 로딩/빈 텍스트 스타일 */
 .loading-text {
     flex-grow: 1;
     display: flex;
@@ -152,7 +161,6 @@
     font-weight: 500;
 }
 
-/* (★추가★) 페이지네이션 컨트롤 스타일 (MyProfileView.css와 동일) */
 .pagination-controls {
     display: flex;
     justify-content: space-between;
@@ -189,4 +197,43 @@
     cursor: not-allowed;
     background-color: #ffffff;
     color: #9ca3af;
+}
+
+.user-item.has-accident {
+    border-color: #ef4444; /* red-500 */
+    background-color: #fee2e2; /* red-100 */
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.accident-badge {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #dc2626; /* red-600 */
+    background-color: #fecaca; /* red-200 */
+    padding: 2px 8px;
+    border-radius: 99px;
+    white-space: nowrap;
+}
+
+/* (★신규★) "X" (지우기) 버튼 스타일 */
+.accident-dismiss-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: rgba(239, 68, 68, 0.7); /* 반투명 빨강 */
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 10;
+    transition: background-color 0.2s;
+}
+.accident-dismiss-btn:hover {
+    background-color: rgba(220, 38, 38, 1); /* 진한 빨강 */
 }

@@ -5,21 +5,28 @@
             <span class="date-info">{{ currentDate }}</span>
         </div>
         <div class="header-right">
-            <button class="icon-button">
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0v-.002z"
-                    />
-                </svg>
-            </button>
+            <div class="notification-wrapper">
+                <button class="icon-button" @click="toggleDropdown">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.5"
+                        stroke="currentColor"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0v-.002z"
+                        />
+                    </svg>
+                    <span v-if="notificationStore.totalCount > 0" class="notification-badge">
+                        {{ notificationStore.totalCount }}
+                    </span>
+                </button>
+
+                <NotificationDropdown v-if="isDropdownOpen" @close="isDropdownOpen = false" />
+            </div>
 
             <router-link to="/profile" class="icon-button">
                 <svg
@@ -43,6 +50,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { useNotificationStore } from '@/stores/notification.store.js'; // (★추가★)
+import NotificationDropdown from './NotificationDropdown.vue'; // (★추가★)
 
 const currentDate = ref('');
 let intervalId = null;
@@ -56,7 +65,6 @@ const pageTitle = computed(() => {
             return '실시간 관제';
         case 'Info':
             return '정보 조회';
-        // (★핵심 수정★) 'Stats' 케이스 추가
         case 'Stats':
             return '통계 분석';
         case 'MyProfile':
@@ -74,15 +82,43 @@ const getFormattedDate = () => {
     currentDate.value = `${year}.${month}.${day} 기준`;
 };
 
+// --- (★추가★) 알림 드롭다운 로직 ---
+const notificationStore = useNotificationStore();
+const isDropdownOpen = ref(false);
+
+const toggleDropdown = () => {
+    isDropdownOpen.value = !isDropdownOpen.value;
+    if (isDropdownOpen.value) {
+        // (★) 드롭다운을 열 때 '읽음'으로 처리
+        notificationStore.markAsRead();
+    }
+};
+
+// (★) 외부 클릭 시 드롭다운 닫기
+const closeDropdownOnClickOutside = (event) => {
+    if (!event.target.closest('.notification-wrapper')) {
+        isDropdownOpen.value = false;
+    }
+};
+// --- (★추가 끝★) ---
+
 onMounted(() => {
     getFormattedDate();
     intervalId = setInterval(getFormattedDate, 60000);
+
+    // (★추가★) 컴포넌트 마운트 시 t_ride 사고 이력 불러오기
+    notificationStore.fetchNotifications();
+
+    // (★추가★) 외부 클릭 리스너 등록
+    document.addEventListener('click', closeDropdownOnClickOutside);
 });
 
 onUnmounted(() => {
     if (intervalId) {
         clearInterval(intervalId);
     }
+    // (★추가★) 리스너 제거
+    document.removeEventListener('click', closeDropdownOnClickOutside);
 });
 </script>
 
