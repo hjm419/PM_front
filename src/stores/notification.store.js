@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import apiClient from '@/api/index.js';
 
+const STORAGE_KEY = 'dismissed_accident_ids'; // (★) RealtimeView와 동일한 키 사용
+
 // 날짜 포맷팅 헬퍼
 const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) return 'N/A';
@@ -30,24 +32,34 @@ export const useNotificationStore = defineStore('notifications', {
         /**
          * (★핵심★)
          * API에서 't_ride' 테이블의 'accident: true'인 최근 "종료된" 주행 목록을 불러옵니다.
+         * + 지운 항목(sessionStorage) 필터링 적용
          */
         async fetchNotifications() {
             if (this.isLoading) return;
             this.isLoading = true;
             try {
-                // (★수정★) '/api/admin/...' -> '/admin/...' (중복된 /api 제거)
                 const response = await apiClient.get('/admin/rides/recent-accidents');
 
+                // (★수정★) sessionStorage에서 지운 ID 목록 가져오기
+                const storedIds = sessionStorage.getItem(STORAGE_KEY);
+                const dismissedIds = storedIds ? new Set(JSON.parse(storedIds)) : new Set();
+
                 // 백엔드 응답(response.kickboards)을 알림창 형식에 맞게 매핑
-                this.accidentRides = response.kickboards.map((ride) => ({
-                    id: ride.rideId, // rideId를 고유 키로 사용
-                    title: `[사고] 사용자 ${ride.userId || '?'}`,
-                    message: `PM ${ride.pmId || '?'} (안전점수: ${ride.safetyScore})`,
-                    // "종료 시간"을 기준으로 표시
-                    time: formatDateTime(ride.endTime),
-                    pmId: ride.pmId || 'N/A',
-                }));
-                this.totalCount = response.totalCount || 0;
+                const allAccidents = response.kickboards || [];
+
+                // (★수정★) 지운 ID는 제외하고 매핑
+                this.accidentRides = allAccidents
+                    .filter((ride) => !dismissedIds.has(ride.rideId)) // 필터링
+                    .map((ride) => ({
+                        id: ride.rideId, // rideId를 고유 키로 사용
+                        title: `[사고] 사용자 ${ride.userId || '?'}`,
+                        message: `PM ${ride.pmId || '?'} (안전점수: ${ride.safetyScore})`,
+                        // "종료 시간"을 기준으로 표시
+                        time: formatDateTime(ride.endTime),
+                        pmId: ride.pmId || 'N/A',
+                    }));
+
+                this.totalCount = this.accidentRides.length;
             } catch (error) {
                 console.error('최근 사고(t_ride) 목록 조회 실패:', error);
                 this.accidentRides = [];
@@ -56,6 +68,16 @@ export const useNotificationStore = defineStore('notifications', {
                 this.isLoading = false;
             }
         },
+
+        /**
+         * (★신규★) 특정 알림 지우기 (RealtimeView 등 외부에서 호출)
+         */
+        dismissNotification(rideId) {
+            // 현재 스토어 목록에서 해당 ID 제거
+            this.accidentRides = this.accidentRides.filter((item) => item.id !== rideId);
+            this.totalCount = this.accidentRides.length;
+        },
+
         /**
          * 아이콘 클릭 시, 개수를 0으로 리셋 (단순 '읽음' 처리)
          */

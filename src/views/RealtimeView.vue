@@ -62,20 +62,23 @@ const formatDateTime = (dateTimeString) => {
 };
 
 /**
- * (★수정★) "X" 버튼 클릭 시, Set과 sessionStorage에 동시 저장
+ * (★수정★) "X" 버튼 클릭 시, Set과 sessionStorage에 동시 저장하고 헤더 알림도 삭제
  * @param {string} rideId - UserList.vue에서 전달받은 rideId
  */
 const handleDismissAccident = (rideId) => {
     // 1. (메모리) "지운 항목" 목록(Set)에 rideId를 추가
     dismissedAccidentRideIds.value.add(rideId);
 
-    // 2. (★신규★) (브라우저 저장소) sessionStorage에 저장
+    // 2. (브라우저 저장소) sessionStorage에 저장
     //    (Set을 Array로 변환 -> JSON 문자열로 변환하여 저장)
     const idArray = Array.from(dismissedAccidentRideIds.value);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(idArray));
 
     // 3. (UI) 즉시 UI 목록(activeRides)에서 제거
     activeRides.value = activeRides.value.filter((ride) => ride.rideId !== rideId);
+
+    // 4. (★신규★) 헤더 알림 스토어에도 "이거 지워줘"라고 요청
+    notificationStore.dismissNotification(rideId);
 };
 
 /**
@@ -139,10 +142,12 @@ const fetchAllData = async () => {
             if (ride.accident && !alertedAccidentIds.value.has(ride.rideId)) {
                 alert(`🚨 [사고 발생] 🚨\n\n사용자 ID: ${ride.id}\nPM ID: ${ride.pmId}\n\n즉시 확인이 필요합니다.`);
                 alertedAccidentIds.value.add(ride.rideId);
-                // (★신규★) sessionStorage에도 즉시 저장
+
+                // (★추가★) 알림 발생 시 sessionStorage에도 기록하여 재로딩 시 유지
                 const idArray = Array.from(dismissedAccidentRideIds.value);
                 sessionStorage.setItem(STORAGE_KEY, JSON.stringify(idArray));
 
+                // 헤더 알림 갱신 요청
                 notificationStore.fetchNotifications();
             }
         });
