@@ -115,33 +115,9 @@
                 </div>
             </StatCard>
 
-            <StatCard title="Top 5 위험 지역 분석">
-                <div class="info-table-wrapper" style="max-height: 288px; overflow-y: auto">
-                    <table class="info-table">
-                        <thead class="info-table-header">
-                            <tr>
-                                <th class="info-table-head" style="width: 60px; text-align: center">순위</th>
-                                <th class="info-table-head">지역명</th>
-                                <th class="info-table-head" style="text-align: right">발생 건수</th>
-                            </tr>
-                        </thead>
-                        <tbody class="info-table-body">
-                            <tr v-if="topRegionsData.length === 0">
-                                <td colspan="3" class="info-table-cell" style="text-align: center; height: 100px">
-                                    (더미 데이터 로드 중)
-                                </td>
-                            </tr>
-                            <tr v-for="item in topRegionsData" :key="item.regionName" class="info-table-row">
-                                <td class="info-table-cell" style="text-align: center; font-weight: 600">
-                                    {{ item.rank }}
-                                </td>
-                                <td class="info-table-cell">{{ item.regionName }}</td>
-                                <td class="info-table-cell" style="text-align: right; font-weight: 600">
-                                    {{ item.count }} 건
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <StatCard title="사고 시 KPI 발생 빈도">
+                <div class="chart-wrapper" style="height: 240px">
+                    <BarChart :chartData="accidentKpiChartData" :chartOptions="accidentKpiChartOptions" />
                 </div>
             </StatCard>
 
@@ -157,42 +133,9 @@
                 </div>
             </StatCard>
 
-            <StatCard title="지역별 안전 점수 평균 (더미)">
-                <div class="info-table-wrapper" style="max-height: 280px; overflow-y: auto">
-                    <table class="info-table">
-                        <thead class="info-table-header">
-                            <tr>
-                                <th class="info-table-head">지역</th>
-                                <th class="info-table-head">평균 안전 점수</th>
-                                <th class="info-table-head">추이</th>
-                                <th class="info-table-head" style="text-align: right">점수 막대</th>
-                            </tr>
-                        </thead>
-                        <tbody class="info-table-body">
-                            <tr v-if="regionData.length === 0">
-                                <td colspan="4" class="info-table-cell" style="text-align: center; height: 100px">
-                                    (더미 데이터 로드 중)
-                                </td>
-                            </tr>
-                            <tr v-for="item in regionData" :key="item.region" class="info-table-row">
-                                <td class="info-table-cell">{{ item.region }}</td>
-                                <td class="info-table-cell">{{ item.score }}점</td>
-                                <td class="info-table-cell">
-                                    <InfoBadge :variant="item.trend.startsWith('+') ? 'default' : 'destructive'">
-                                        {{ item.trend }}
-                                    </InfoBadge>
-                                </td>
-                                <td class="info-table-cell" style="text-align: right">
-                                    <div class="progress-bar-container-stats">
-                                        <div
-                                            class="progress-bar-stats"
-                                            :style="{ width: `${item.score}%`, backgroundColor: '#3B82F6' }"
-                                        ></div>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <StatCard title="사고 발생률 추이 (최근 30일)">
+                <div class="chart-wrapper" style="height: 240px">
+                    <LineChart :chartData="accidentTrendChartData" :chartOptions="accidentTrendChartOptions" />
                 </div>
             </StatCard>
 
@@ -210,31 +153,20 @@ import { ref, computed, onMounted } from 'vue';
 import apiClient from '@/api/index.js';
 import StatsKpiCard from '@/components/StatsKpiCard.vue';
 import StatCard from '@/components/StatCard.vue';
-import InfoInput from '@/components/ui/InfoInput.vue';
 import InfoButton from '@/components/ui/InfoButton.vue';
-import InfoBadge from '@/components/ui/InfoBadge.vue';
 import LineChart from '@/components/charts/LineChart.vue';
 import BarChart from '@/components/charts/BarChart.vue';
 import PieChart from '@/components/charts/PieChart.vue';
 
-// (★추가★) `riskColors is not defined` 오류 해결
 const riskColors = ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6'];
-
-// --- (★제거★) 기간 필터 상태 제거 ---
-// const startDate = ref(null);
-// const endDate = ref(null);
 const showRiskTable = ref(false);
 
-// (★제거★) apiParams 제거
-// const apiParams = computed(() => ({ ... }));
-
-// --- (★수정★) riskRate의 unit을 '%' -> '건'으로 변경 ---
 const kpiData = ref({
     users: { value: '...', unit: '명' },
     distance: { value: '...', unit: 'km' },
     rides: { value: '...', unit: '건' },
     risks: { value: '...', unit: '건' },
-    riskRate: { value: '...', unit: '건' }, // (★수정★)
+    riskRate: { value: '...', unit: '건' },
     helmetRate: { value: '...', unit: '%' },
     safetyScore: { value: '...', unit: '점' },
 });
@@ -243,14 +175,10 @@ const kpiTrendData = ref({ labels: [], datasets: { rideCounts: [], helmetRates: 
 const riskTypeData = ref([]);
 const timeRiskData = ref({ labels: [], data: [] });
 const safetyScoreDistribution = ref({ labels: [], data: [] });
-
-// API 호출용 ref
 const userGroupData = ref([]);
-// 더미 데이터용 ref
-const regionData = ref([]);
-const topRegionsData = ref([]);
+const accidentKpiData = ref({ labels: [], data: [] }); // (★신규★)
+const accidentTrendData = ref({ labels: [], data: [] }); // (★신규★)
 
-// --- (★추가★) 날짜 헬퍼 (트렌드 차트용) ---
 const getToday = () => new Date().toISOString().split('T')[0];
 const getPastDate = (days) => {
     const date = new Date();
@@ -258,162 +186,102 @@ const getPastDate = (days) => {
     return date.toISOString().split('T')[0];
 };
 
-// --- API 호출 함수들 ---
-
-// (★수정★) 7개 KPI 데이터 (날짜 필터 제거)
 const fetchKpiData = async () => {
     try {
-        // (★수정★) params 제거
         const [kpiResponse, scoreResponse] = await Promise.all([
-            apiClient.get('/admin/stats/kpis'), // (전체 기간 KPI 5종)
-            apiClient.get('/admin/stats/safety-scores'), // (전체 기간 평균 점수)
+            apiClient.get('/admin/stats/kpis'),
+            apiClient.get('/admin/stats/safety-scores'),
         ]);
-
-        // (★수정★) kpiResponse (전체 기간)에서 5개 KPI 설정
         kpiData.value.users.value = (kpiResponse.totalUserCount || 0).toLocaleString();
         kpiData.value.distance.value = (parseFloat(kpiResponse.totalDistance) || 0).toLocaleString();
         kpiData.value.risks.value = (kpiResponse.totalRiskCount || 0).toLocaleString();
         kpiData.value.helmetRate.value = kpiResponse.helmetRate || '0.0';
         kpiData.value.rides.value = (kpiResponse.totalRides || 0).toLocaleString();
-
-        // (★수정★) scoreResponse (전체 기간)에서 1개 KPI 설정
         kpiData.value.safetyScore.value = scoreResponse.averageScore || '0.0';
-
-        // --- (★수정★) '운행 1건당 평균 위험 건수' 계산 로직 변경 ---
         const totalRides = kpiResponse.totalRides || 0;
         const totalRisks = kpiResponse.totalRiskCount || 0;
-
-        if (totalRides > 0) {
-            kpiData.value.riskRate.value = (totalRisks / totalRides).toFixed(1); // 예: 1.4
-        } else {
-            kpiData.value.riskRate.value = '0.0';
-        }
-        // --- 계산 수정 완료 ---
+        kpiData.value.riskRate.value = totalRides > 0 ? (totalRisks / totalRides).toFixed(1) : '0.0';
     } catch (error) {
         console.error('KPI 데이터 로딩 실패:', error);
-        // (★추가★) 실패 시 모든 값을 '오류'로 설정
-        kpiData.value.users.value = '오류';
-        kpiData.value.distance.value = '오류';
-        kpiData.value.risks.value = '오류';
-        kpiData.value.helmetRate.value = '오류';
-        kpiData.value.safetyScore.value = '오류';
-        kpiData.value.rides.value = '오류';
-        kpiData.value.riskRate.value = '오류';
     }
 };
 
-// KPI 트렌드 (LineChart) - (항상 최근 30일)
 const fetchKpiTrends = async () => {
     try {
-        const params = {
-            startDate: getPastDate(30),
-            endDate: getToday(),
-            interval: 'daily',
-        };
+        const params = { startDate: getPastDate(30), endDate: getToday(), interval: 'daily' };
         const response = await apiClient.get('/admin/stats/kpi-trends', { params });
         kpiTrendData.value = response;
     } catch (error) {
         console.error('KPI 트렌드 데이터 로딩 실패:', error);
-        kpiTrendData.value = { labels: [], datasets: { rideCounts: [], helmetRates: [], riskCounts: [] } };
     }
 };
 
-// (★복원★) 위험 행동 유형 (PieChart) - (전체 기간)
 const fetchRiskTypes = async () => {
     try {
-        // (★수정★) apiParams 제거
         const response = await apiClient.get('/admin/stats/risk-types');
         riskTypeData.value = response.data.map((item, index) => ({
             name: item.kpiName,
             value: item.percentage,
             count: item.count,
-            color: riskColors[index % riskColors.length], // (★수정★) riskColors 배열 사용
+            color: riskColors[index % riskColors.length],
         }));
     } catch (error) {
         console.error('위험 행동 유형 데이터 로딩 실패:', error);
-        riskTypeData.value = [];
     }
 };
 
-// "사고 많이 날거 같은 지역" (더미 데이터)
-const fetchTopRegions = async () => {
-    try {
-        // (임시 더미 데이터)
-        topRegionsData.value = [
-            { rank: 1, regionName: '구미역 네거리 (더미)', count: 132 },
-            { rank: 2, regionName: '인동 로데오거리 (더미)', count: 105 },
-            { rank: 3, regionName: '시청 앞 사거리 (더미)', count: 91 },
-            { rank: 4, regionName: '송정동 먹자골목 (더미)', count: 77 },
-            { rank: 5, regionName: '원평동 문화로 (더미)', count: 65 },
-        ];
-    } catch (error) {
-        console.error('Top 위험 지역 데이터 로딩 실패:', error);
-        topRegionsData.value = [];
-    }
-};
-
-// (★복원★) 시간대별 위험도 (BarChart) - (전체 기간)
 const fetchHourlyRisk = async () => {
     try {
-        // (★수정★) apiParams 제거
         const response = await apiClient.get('/admin/stats/hourly-risk');
         timeRiskData.value = response;
     } catch (error) {
         console.error('시간대별 위험도 데이터 로딩 실패:', error);
-        timeRiskData.value = { labels: [], data: [] };
     }
 };
 
-// (★복원★) 사용자 그룹별 비교 (API 호출) - (전체 기간)
 const fetchUserGroupComparison = async () => {
     try {
-        // (★수정★) apiParams 제거
         const response = await apiClient.get('/admin/stats/user-group-comparison');
         userGroupData.value = response.groups;
     } catch (error) {
         console.error('사용자 그룹 비교 데이터 로딩 실패:', error);
-        userGroupData.value = [];
     }
 };
 
-// "금오공대 주변 동" (더미 데이터)
-const fetchRegionalScores = async () => {
-    try {
-        // (임시 더미 데이터)
-        regionData.value = [
-            { region: '양호동 (더미)', score: 85, trend: '+2' },
-            { region: '부곡동 (더미)', score: 78, trend: '-3' },
-            { region: '거의동 (더미)', score: 82, trend: '+1' },
-            { region: '옥계동 (더미)', score: 75, trend: '-1' },
-            { region: '사곡동 (더미)', score: 80, trend: '-2' },
-        ];
-    } catch (error) {
-        console.error('지역별 안전 점수 데이터 로딩 실패:', error);
-        regionData.value = [];
-    }
-};
-
-// (★복원★) 안전 점수 분포 (BarChart) - (전체 기간)
 const fetchSafetyScoreDistribution = async () => {
     try {
-        // (★수정★) apiParams 제거
         const response = await apiClient.get('/admin/stats/safety-scores');
-        const labels = Object.keys(response.distribution);
-        const data = Object.values(response.distribution);
-        safetyScoreDistribution.value = { labels, data };
+        safetyScoreDistribution.value = {
+            labels: Object.keys(response.distribution),
+            data: Object.values(response.distribution),
+        };
     } catch (error) {
         console.error('안전 점수 분포 데이터 로딩 실패:', error);
-        safetyScoreDistribution.value = { labels: [], data: [] };
     }
 };
 
-// (★제거★) '조회' 버튼 클릭 시 함수 제거
-// const fetchAllStatsData = () => { ... };
+// (★신규★)
+const fetchAccidentKpiStats = async () => {
+    try {
+        const response = await apiClient.get('/admin/stats/accident-kpi');
+        accidentKpiData.value = response;
+    } catch (error) {
+        console.error('사고 KPI 통계 로딩 실패:', error);
+    }
+};
 
-// (★추가★) 사용자 그룹 차트의 고정된 X축 레이블
-const userGroupLabels = ['신규 사용자', '10회 이상', '100회 이상'];
+// (★신규★)
+const fetchAccidentTrend = async () => {
+    try {
+        const params = { startDate: getPastDate(30), endDate: getToday() };
+        const response = await apiClient.get('/admin/stats/accident-trend', { params });
+        accidentTrendData.value = response;
+    } catch (error) {
+        console.error('사고 발생률 추이 로딩 실패:', error);
+    }
+};
 
-// --- 차트 데이터 가공 (computed) ---
+// --- Chart Data ---
 const kpiTrendChartData = computed(() => ({
     labels: kpiTrendData.value.labels,
     datasets: [
@@ -449,17 +317,9 @@ const kpiTrendChartData = computed(() => ({
 const kpiTrendChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: {
-        legend: { display: true, position: 'bottom' },
-        tooltip: { mode: 'index', intersect: false },
-    },
+    plugins: { legend: { display: true, position: 'bottom' } },
     scales: {
-        yLeft: {
-            type: 'linear',
-            display: true,
-            position: 'left',
-            title: { display: true, text: '건수' },
-        },
+        yLeft: { type: 'linear', display: true, position: 'left', title: { display: true, text: '건수' } },
         yRight: {
             type: 'linear',
             display: true,
@@ -469,116 +329,108 @@ const kpiTrendChartOptions = {
         },
     },
 };
+
 const riskTypeChartData = computed(() => ({
     labels: riskTypeData.value.map((d) => d.name),
     datasets: [
-        {
-            data: riskTypeData.value.map((d) => d.value),
-            backgroundColor: riskTypeData.value.map((d) => d.color),
-        },
+        { data: riskTypeData.value.map((d) => d.value), backgroundColor: riskTypeData.value.map((d) => d.color) },
     ],
 }));
 const riskTypeChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     cutout: '60%',
-    plugins: {
-        legend: { display: false },
-    },
+    plugins: { legend: { display: false } },
 };
+
 const timeRiskChartData = computed(() => ({
     labels: timeRiskData.value.labels,
-    datasets: [
-        {
-            label: '위험 행동 수',
-            data: timeRiskData.value.data,
-            backgroundColor: '#EF4444',
-            borderRadius: 4,
-        },
-    ],
+    datasets: [{ label: '위험 행동 수', data: timeRiskData.value.data, backgroundColor: '#EF4444', borderRadius: 4 }],
 }));
-const timeRiskChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-        legend: { display: false },
-    },
-};
+const timeRiskChartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
 
-// (★수정★) userGroupChartData: 고정 레이블 및 데이터 매핑
+const userGroupLabels = ['신규 사용자', '10회 이상', '100회 이상'];
 const userGroupChartData = computed(() => {
-    // API 응답(userGroupData.value)을 { '신규 사용자': 75, ... } 형태의 Map으로 변환
     const dataMap = new Map(userGroupData.value.map((d) => [d.group, d['평균 안전점수']]));
-
-    // 고정된 레이블 순서대로 데이터를 매핑 (없으면 0)
     const data = userGroupLabels.map((label) => dataMap.get(label) || 0);
-
     return {
-        labels: userGroupLabels, // (★수정★) 고정 레이블 사용
-        datasets: [
-            {
-                label: '평균 안전점수',
-                data: data, // (★수정★) 매핑된 데이터 사용
-                backgroundColor: '#3B82F6',
-                borderRadius: 4,
-            },
-        ],
+        labels: userGroupLabels,
+        datasets: [{ label: '평균 안전점수', data: data, backgroundColor: '#3B82F6', borderRadius: 4 }],
     };
 });
-
-// (★유지★) userGroupChartOptions: 단일 Y축 (API 기준)
 const userGroupChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: {
-        legend: { display: false },
-    },
-    scales: {
-        y: {
-            type: 'linear',
-            display: true,
-            position: 'left',
-            title: { display: true, text: '평균 안전 점수' },
-            min: 0,
-            max: 100,
-        },
-    },
+    plugins: { legend: { display: false } },
+    scales: { y: { min: 0, max: 100 } },
 };
 
 const safetyScoreChartData = computed(() => ({
     labels: safetyScoreDistribution.value.labels,
     datasets: [
-        {
-            label: '사용자 수',
-            data: safetyScoreDistribution.value.data,
-            backgroundColor: '#8B5CF6',
-            borderRadius: 4,
-        },
+        { label: '사용자 수', data: safetyScoreDistribution.value.data, backgroundColor: '#8B5CF6', borderRadius: 4 },
     ],
 }));
 const safetyScoreChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    plugins: {
-        legend: { display: false },
+    plugins: { legend: { display: false } },
+};
+
+// (★신규★) 사고 KPI 차트 (가로 눈금 정수 설정 추가)
+const accidentKpiChartData = computed(() => ({
+    labels: accidentKpiData.value.labels,
+    datasets: [
+        { label: '사고 시 발생 횟수', data: accidentKpiData.value.data, backgroundColor: '#EF4444', borderRadius: 4 },
+    ],
+}));
+const accidentKpiChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: {
+        x: {
+            beginAtZero: true,
+            // (★추가★) 정수(1단위) 눈금 강제 설정
+            ticks: {
+                // stepSize: 1,  // <--- 이 줄은 지워주세요! (숫자가 커지면 빽빽해짐 방지)
+                precision: 0,
+            },
+        },
     },
 };
 
-// (★수정★) 마운트 시 모든 데이터를 한 번에 로드
+// (★신규★) 사고 추이 차트
+const accidentTrendChartData = computed(() => ({
+    labels: accidentTrendData.value.labels,
+    datasets: [
+        {
+            label: '사고 발생률 (%)',
+            data: accidentTrendData.value.data,
+            borderColor: '#DC2626',
+            backgroundColor: 'rgba(220, 38, 38, 0.1)',
+            fill: true,
+            tension: 0.3,
+        },
+    ],
+}));
+const accidentTrendChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, title: { display: true, text: '%' } } },
+};
+
 onMounted(() => {
-    fetchKpiData(); // (전체 기간 7개 KPI)
-    fetchSafetyScoreDistribution(); // (전체 기간 안전 점수 분포)
-
-    fetchKpiTrends(); // (트렌드 차트는 날짜 필터와 무관하게 30일 고정)
-
-    // (★수정★) 날짜 필터와 무관한 차트들도 로드
+    fetchKpiData();
+    fetchSafetyScoreDistribution();
+    fetchKpiTrends();
     fetchRiskTypes();
     fetchHourlyRisk();
     fetchUserGroupComparison();
-
-    // (더미 데이터)
-    fetchTopRegions();
-    fetchRegionalScores();
+    fetchAccidentKpiStats();
+    fetchAccidentTrend();
 });
 </script>
 
