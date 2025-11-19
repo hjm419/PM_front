@@ -138,19 +138,24 @@ const fetchAllData = async () => {
         });
 
         // 5. (팝업 알림) "운행 중인 목록"에서만 새로 감지된 사고 확인
-        mappedActiveRides.forEach((ride) => {
-            if (ride.accident && !alertedAccidentIds.value.has(ride.rideId)) {
+        for (const ride of allRidesMap.values()) {
+            // 1) 사고가 true이고
+            // 2) 이미 알림을 띄운 적이 없는 ID이고
+            // 3) (선택사항) 사용자가 'X' 눌러서 지운 항목이 아닌 경우에만 알림
+            if (
+                ride.accident &&
+                !alertedAccidentIds.value.has(ride.rideId) &&
+                !dismissedAccidentRideIds.value.has(ride.rideId)
+            ) {
                 alert(`🚨 [사고 발생] 🚨\n\n사용자 ID: ${ride.id}\nPM ID: ${ride.pmId}\n\n즉시 확인이 필요합니다.`);
+
+                // 알림 보냄 처리
                 alertedAccidentIds.value.add(ride.rideId);
 
-                // (★추가★) 알림 발생 시 sessionStorage에도 기록하여 재로딩 시 유지
-                const idArray = Array.from(dismissedAccidentRideIds.value);
-                sessionStorage.setItem(STORAGE_KEY, JSON.stringify(idArray));
-
-                // 헤더 알림 갱신 요청
+                // 필요하다면 소리 재생 로직 추가 (예: notificationStore.playAlertSound())
                 notificationStore.fetchNotifications();
             }
-        });
+        }
 
         // 6. Map을 배열로 변환
         const allRidesList = Array.from(allRidesMap.values());
