@@ -16,22 +16,23 @@
                     <table class="info-table">
                         <thead class="info-table-header">
                             <tr>
-                                <th class="info-table-head">KPI ID</th>
-                                <th class="info-table-head">위험 행동 (kpi_name)</th>
-                                <th class="info-table-head">설명 (kpi_desc)</th>
-                                <th class="info-table-head">가중치 (Weight)</th>
-                                <th class="info-table-head" style="width: 100px">저장</th>
-                                <th class="info-table-head" style="width: 100px">삭제</th>
+                                <th class="info-table-head" style="width: 60px">ID</th>
+                                <th class="info-table-head">위험 행동</th>
+                                <th class="info-table-head">설명</th>
+                                <th class="info-table-head" style="width: 100px">현재 가중치</th>
+                                <th class="info-table-head" style="width: 200px">통계 분석 추천</th>
+                                <th class="info-table-head" style="width: 80px">저장</th>
+                                <th class="info-table-head" style="width: 80px">삭제</th>
                             </tr>
                         </thead>
                         <tbody class="info-table-body">
                             <tr v-if="store.isLoading">
-                                <td colspan="6" class="info-table-cell" style="text-align: center; height: 100px">
+                                <td colspan="7" class="info-table-cell" style="text-align: center; height: 100px">
                                     KPI 목록을 불러오는 중입니다...
                                 </td>
                             </tr>
                             <tr v-else-if="store.kpiList.length === 0">
-                                <td colspan="6" class="info-table-cell" style="text-align: center; height: 100px">
+                                <td colspan="7" class="info-table-cell" style="text-align: center; height: 100px">
                                     조회된 KPI 항목이 없습니다.
                                 </td>
                             </tr>
@@ -39,6 +40,7 @@
                                 <td class="info-table-cell">{{ kpi.kpi_id }}</td>
                                 <td class="info-table-cell">{{ kpi.kpi_name }}</td>
                                 <td class="info-table-cell">{{ kpi.kpi_desc }}</td>
+
                                 <td class="info-table-cell">
                                     <InfoInput
                                         type="number"
@@ -46,6 +48,34 @@
                                         @input="updateEditingWeight(kpi.kpi_id, $event.target.value)"
                                     />
                                 </td>
+
+                                <td class="info-table-cell">
+                                    <div v-if="store.kpiRecommendations[kpi.kpi_id]" class="recommendation-box">
+                                        <div class="rec-value-row">
+                                            <span class="rec-label">권장:</span>
+                                            <strong class="rec-value">
+                                                {{ store.kpiRecommendations[kpi.kpi_id].recommended_weight }}
+                                            </strong>
+                                            <button
+                                                class="apply-btn"
+                                                @click="
+                                                    applyRecommendation(
+                                                        kpi.kpi_id,
+                                                        store.kpiRecommendations[kpi.kpi_id].recommended_weight
+                                                    )
+                                                "
+                                                title="권장 값 적용"
+                                            >
+                                                적용
+                                            </button>
+                                        </div>
+                                        <div class="rec-reason">
+                                            {{ store.kpiRecommendations[kpi.kpi_id].reason }}
+                                        </div>
+                                    </div>
+                                    <div v-else class="no-rec">데이터 부족</div>
+                                </td>
+
                                 <td class="info-table-cell">
                                     <InfoButton
                                         variant="default"
@@ -63,7 +93,7 @@
                                         class="btn-delete"
                                         @click="handleDelete(kpi.kpi_id, kpi.kpi_name)"
                                     >
-                                        Delete
+                                        Del
                                     </InfoButton>
                                 </td>
                             </tr>
@@ -102,18 +132,20 @@ const close = () => {
     editingWeights.value = {};
 };
 
-// InfoInput에 입력할 때마다 임시 객체(editingWeights)에 값을 저장
 const updateEditingWeight = (kpiId, newValue) => {
     editingWeights.value[kpiId] = newValue;
 };
 
-// "Save" 버튼 활성화/비활성화 여부 판단
+// (★신규★) '적용' 버튼 클릭 시
+const applyRecommendation = (kpiId, recommendedValue) => {
+    editingWeights.value[kpiId] = String(recommendedValue);
+};
+
 const isWeightChanged = (kpi) => {
     const editedValue = editingWeights.value[kpi.kpi_id];
     return editedValue !== undefined && parseFloat(editedValue) !== parseFloat(kpi.weight);
 };
 
-// "Save" 버튼 클릭 시
 const handleSave = async (kpiId) => {
     const newWeight = editingWeights.value[kpiId];
     if (newWeight === undefined) return;
@@ -122,19 +154,12 @@ const handleSave = async (kpiId) => {
     delete editingWeights.value[kpiId];
 };
 
-/**
- * (★신규★) "Delete" 버튼 클릭 시
- */
 const handleDelete = async (kpiId, kpiName) => {
-    // (★) 삭제 전 확인
     if (window.confirm(`정말 [${kpiName}] 항목을 DB에서 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
         await store.deleteKpi(kpiId);
     }
 };
 
-/**
- * (★신규★) "새 항목 추가" 버튼 클릭 시
- */
 const handleCreate = async () => {
     await store.createKpi();
 };
@@ -142,3 +167,49 @@ const handleCreate = async () => {
 
 <style scoped src="@/assets/styles/components/SettingsModal.css"></style>
 <style scoped src="@/assets/styles/components/info/CommonUI.css"></style>
+
+<style scoped>
+/* (★신규★) 추천 영역 스타일 */
+.recommendation-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.rec-value-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.rec-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+.rec-value {
+    font-size: 0.9rem;
+    color: #2563eb; /* 파란색 강조 */
+    font-weight: 700;
+}
+.apply-btn {
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #2563eb;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+.apply-btn:hover {
+    background-color: #dbeafe;
+}
+.rec-reason {
+    font-size: 0.75rem;
+    color: #9ca3af; /* 연한 회색 */
+}
+.no-rec {
+    font-size: 0.75rem;
+    color: #d1d5db;
+    font-style: italic;
+}
+</style>
