@@ -72,7 +72,6 @@ import { ref, onMounted, watch } from 'vue';
 
 const props = defineProps({
     districts: { type: Object, required: true },
-    // (★수정★) users -> kickboards
     kickboards: { type: Array, required: true },
 });
 
@@ -80,7 +79,7 @@ const mapInstance = ref(null);
 const mapLoaded = ref(false);
 const pmOverlays = ref([]);
 
-// (기존) 킥보드 SVG 아이콘 (원본)
+// 킥보드 SVG 아이콘
 const kickboardSVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M18.5 12H16V9H18.5V12ZM18.15 13C18.6 13 19 13.4 19 13.85C19 14.3 18.6 14.7 18.15 14.7C17.7 14.7 17.3 14.3 17.3 13.85C17.3 13.4 17.7 13 18.15 13ZM6.85 13C7.3 13 7.7 13.4 7.7 13.85C7.7 14.3 7.3 14.7 6.85 14.7C6.4 14.7 6 14.3 6 13.85C6 13.4 6.4 13 6.85 13ZM5.5 12H8V9H5.5V12ZM14.75 16H9.25C9.25 16 9 15.75 9 15.5C9 15.25 9.25 15 9.25 15H14.75C14.75 15 15 15.25 15 15.5C15 15.75 14.75 16 14.75 16ZM19 16.5V18H5V16.5L6.5 15.25H17.5L19 16.5ZM13.5 6.5H10.5L11.25 4H12.75L13.5 6.5Z" /></svg>`;
 
 onMounted(() => {
@@ -90,27 +89,23 @@ onMounted(() => {
 watch(
     () => props.kickboards,
     (newKickboards) => {
-        // (★수정★) 맵이 로드되었고, 킥보드 데이터가 1개 이상 있을 때만 실행
         if (mapLoaded.value && newKickboards.length > 0) {
-            // 1. 마커를 그립니다.
             displayPMsOnMap(newKickboards);
-
-            // 2. (★핵심 수정★) 모든 킥보드를 포함하는 경계(Bounds)를 계산합니다.
+            // ※ 주의: 여기서 매번 setBounds를 하면 사용자가 지도를 움직여도
+            // 데이터가 갱신될 때마다 강제로 전체 뷰로 돌아가므로 불편할 수 있습니다.
+            // 초기 로딩 시에만 bounds를 잡거나, 주석 처리하는 것이 좋습니다.
+            /*
             const bounds = new window.kakao.maps.LatLngBounds();
             newKickboards.forEach((kb) => {
-                // (★추가★) 유효한 좌표만 경계에 포함
                 if (kb.lat && kb.lng) {
                     bounds.extend(new window.kakao.maps.LatLng(kb.lat, kb.lng));
                 }
             });
-
-            // 3. (★핵심 수정★) 계산된 경계(Bounds)로 지도의 중심과 줌 레벨을 자동 설정합니다.
             if (mapInstance.value) {
                 mapInstance.value.setBounds(bounds);
             }
-        }
-        // (★추가★) 킥보드 데이터가 0개이면 (예: 운행중 목록 0개) 마커만 지웁니다.
-        else if (mapLoaded.value) {
+            */
+        } else if (mapLoaded.value) {
             displayPMsOnMap([]);
         }
     },
@@ -129,8 +124,6 @@ const initMap = () => {
     const mapContainer = document.getElementById('realtime-map');
     if (!mapContainer || mapInstance.value) return;
 
-    // (★수정★) 처음 지도를 생성할 때는 기본 위치로 설정합니다.
-    // (watch에서 킥보드 데이터가 들어오면 어차피 중심으로 이동합니다)
     const mapOption = {
         center: new window.kakao.maps.LatLng(35.8244, 128.738),
         level: 5,
@@ -140,8 +133,6 @@ const initMap = () => {
     mapInstance.value = new window.kakao.maps.Map(mapContainer, mapOption);
     mapLoaded.value = true;
     mapInstance.value.relayout();
-
-    // (★제거★) initMap에서는 마커를 그리지 않습니다. (watch에서 처리)
 };
 
 const zoomIn = () => {
@@ -156,7 +147,6 @@ const zoomOut = () => {
     }
 };
 
-// (★수정★) '내 위치' 버튼은 경계(Bounds) 계산 대신 '내 위치'로 이동
 const goToMyLocation = () => {
     if (!mapInstance.value) {
         alert('지도가 아직 로드되지 않았습니다.');
@@ -169,9 +159,8 @@ const goToMyLocation = () => {
                 const lng = position.coords.longitude;
                 const currentPosition = new window.kakao.maps.LatLng(lat, lng);
 
-                // (★수정★) setBounds가 아닌 setCenter로 '내 위치'로 이동
                 mapInstance.value.setCenter(currentPosition);
-                mapInstance.value.setLevel(4); // (내 위치는 확대)
+                mapInstance.value.setLevel(4);
                 mapInstance.value.relayout();
 
                 new window.kakao.maps.Marker({
@@ -189,15 +178,35 @@ const goToMyLocation = () => {
     }
 };
 
-/**
- * (★수정★)
- * getScoreColorClass -> getStatusColorClass
- * (global.css의 상태별 마커 스타일을 사용합니다)
- */
+// (수정) 외부에서 호출 가능한 '해당 킥보드로 이동' 함수
+const focusKickboard = (pmId) => {
+    if (!mapInstance.value || !props.kickboards) return;
+
+    // pmId에 해당하는 킥보드 찾기
+    const targetKb = props.kickboards.find((kb) => kb.id === pmId);
+
+    if (targetKb && targetKb.lat && targetKb.lng) {
+        const moveLatLon = new window.kakao.maps.LatLng(targetKb.lat, targetKb.lng);
+
+        // 부드럽게 이동 (panTo)
+        mapInstance.value.panTo(moveLatLon);
+
+        // 필요하다면 줌 레벨도 변경 가능 (예: 좀 더 확대해서 보여주기)
+        // mapInstance.value.setLevel(3);
+    } else {
+        console.warn(`Kickboard ${pmId} not found or invalid location.`);
+    }
+};
+
+// (수정) 부모 컴포넌트에서 호출할 수 있도록 expose
+defineExpose({
+    focusKickboard,
+});
+
 const getStatusColorClass = (status) => {
-    if (status === 'in_use') return 'status-running'; // (파랑)
-    if (status === 'maintenance') return 'status-error'; // (빨강)
-    return ''; // (대기 'available'은 기본 회색)
+    if (status === 'in_use') return 'status-running';
+    if (status === 'maintenance') return 'status-error';
+    return '';
 };
 
 const displayPMsOnMap = (kickboards) => {
@@ -205,9 +214,7 @@ const displayPMsOnMap = (kickboards) => {
     pmOverlays.value.forEach((overlay) => overlay.setMap(null));
     pmOverlays.value = [];
 
-    // (★수정★) users -> kickboards
     kickboards.forEach((kb) => {
-        // (★수정★) getScoreColorClass -> getStatusColorClass
         const statusClass = getStatusColorClass(kb.status);
         const content = `<div class="pm-icon-overlay ${statusClass}">${kickboardSVG}</div>`;
 
