@@ -1,14 +1,13 @@
 import { defineStore } from 'pinia';
 import apiClient from '@/api/index.js';
 
-const STORAGE_KEY = 'dismissed_accident_ids'; // (★) RealtimeView와 동일한 키 사용
+const STORAGE_KEY = 'dismissed_accident_ids';
 
 // 날짜 포맷팅 헬퍼
 const formatDateTime = (dateTimeString) => {
     if (!dateTimeString) return 'N/A';
     try {
         const dateObj = new Date(dateTimeString);
-        // '2025. 11. 18. 오후 4:07' 형식으로 변경
         return dateObj.toLocaleString('ko-KR', {
             year: 'numeric',
             month: '2-digit',
@@ -23,38 +22,31 @@ const formatDateTime = (dateTimeString) => {
 
 export const useNotificationStore = defineStore('notifications', {
     state: () => ({
-        // t_ride 데이터를 저장할 배열
         accidentRides: [],
         isLoading: false,
         totalCount: 0,
+        // (★추가★) 이미 알림(토스트)을 띄운 사고 ID 목록을 전역 상태로 관리
+        // 페이지를 이동해도 이 목록은 초기화되지 않습니다.
+        alertedAccidentIds: new Set(),
     }),
     actions: {
-        /**
-         * (★핵심★)
-         * API에서 't_ride' 테이블의 'accident: true'인 최근 "종료된" 주행 목록을 불러옵니다.
-         * + 지운 항목(sessionStorage) 필터링 적용
-         */
         async fetchNotifications() {
             if (this.isLoading) return;
             this.isLoading = true;
             try {
                 const response = await apiClient.get('/admin/rides/recent-accidents');
 
-                // (★수정★) sessionStorage에서 지운 ID 목록 가져오기
                 const storedIds = sessionStorage.getItem(STORAGE_KEY);
                 const dismissedIds = storedIds ? new Set(JSON.parse(storedIds)) : new Set();
 
-                // 백엔드 응답(response.kickboards)을 알림창 형식에 맞게 매핑
                 const allAccidents = response.kickboards || [];
 
-                // (★수정★) 지운 ID는 제외하고 매핑
                 this.accidentRides = allAccidents
-                    .filter((ride) => !dismissedIds.has(ride.rideId)) // 필터링
+                    .filter((ride) => !dismissedIds.has(ride.rideId))
                     .map((ride) => ({
-                        id: ride.rideId, // rideId를 고유 키로 사용
+                        id: ride.rideId,
                         title: `[사고] 사용자 ${ride.userId || '?'}`,
                         message: `PM ${ride.pmId || '?'} (안전점수: ${ride.safetyScore})`,
-                        // "종료 시간"을 기준으로 표시
                         time: formatDateTime(ride.endTime),
                         pmId: ride.pmId || 'N/A',
                     }));
@@ -69,20 +61,23 @@ export const useNotificationStore = defineStore('notifications', {
             }
         },
 
-        /**
-         * (★신규★) 특정 알림 지우기 (RealtimeView 등 외부에서 호출)
-         */
         dismissNotification(rideId) {
-            // 현재 스토어 목록에서 해당 ID 제거
             this.accidentRides = this.accidentRides.filter((item) => item.id !== rideId);
             this.totalCount = this.accidentRides.length;
         },
 
-        /**
-         * 아이콘 클릭 시, 개수를 0으로 리셋 (단순 '읽음' 처리)
-         */
         markAsRead() {
             this.totalCount = 0;
+        },
+
+        // (★추가★) 해당 사고 ID를 '알림 보냄' 상태로 등록
+        markAsAlerted(rideId) {
+            this.alertedAccidentIds.add(rideId);
+        },
+
+        // (★추가★) 해당 사고 ID가 이미 알림을 보냈는지 확인
+        hasAlerted(rideId) {
+            return this.alertedAccidentIds.has(rideId);
         },
     },
 });

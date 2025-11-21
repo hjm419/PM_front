@@ -27,25 +27,22 @@ import apiClient from '@/api/index.js';
 import UserList from '@/components/UserList.vue';
 import RealtimeMap from '@/components/RealtimeMap.vue';
 import { useNotificationStore } from '@/stores/notification.store.js';
-import { useToast } from 'vue-toastification'; // (★추가★) 토스트 훅 가져오기
+import { useToast } from 'vue-toastification'; // Toast 라이브러리
 
-// (수정) 지도 컴포넌트 참조를 위한 ref
 const realtimeMapRef = ref(null);
-
 const activeRides = ref([]);
 const allKickboards = ref([]);
-
 const districts = ref({});
 const isListOpen = ref(true);
 const timer = ref(null);
-const alertedAccidentIds = ref(new Set());
+
+// (★중요★) 로컬 변수 alertedAccidentIds 삭제됨 -> Store 사용
 const notificationStore = useNotificationStore();
-const toast = useToast(); // (★추가★) 토스트 사용 선언
+const toast = useToast();
 
 const dismissedAccidentRideIds = ref(new Set());
 const STORAGE_KEY = 'dismissed_accident_ids';
 
-// (수정) 리스트 클릭 시 지도 이동 핸들러
 const handleFocusRide = (pmId) => {
     if (realtimeMapRef.value) {
         realtimeMapRef.value.focusKickboard(pmId);
@@ -123,24 +120,22 @@ const fetchAllData = async () => {
             allRidesMap.set(ride.rideId, ride);
         });
 
-        // (★수정★) alert 대신 toast 사용
+        // (★수정★) Store를 통해 중복 알림 방지
         for (const ride of allRidesMap.values()) {
             if (
                 ride.accident &&
-                !alertedAccidentIds.value.has(ride.rideId) &&
+                !notificationStore.hasAlerted(ride.rideId) && // <-- Store 확인
                 !dismissedAccidentRideIds.value.has(ride.rideId)
             ) {
-                // 🚨 기존 alert 코드 삭제됨
-                // alert(`🚨 [사고 발생] 🚨\n\n사용자 ID: ${ride.id}\nPM ID: ${ride.pmId}\n\n즉시 확인이 필요합니다.`);
-
-                // ✨ 신규 Toast 알림 적용
+                // 토스트 알림 표시
                 toast.error(`🚨 사고 발생!\n사용자: ${ride.id}\nPM: ${ride.pmId}`, {
-                    timeout: 10000, // 10초 동안 표시 (중요하니까 조금 길게)
-                    closeOnClick: false, // 클릭해도 닫히지 않음 (X 버튼으로 닫기)
+                    timeout: 10000,
+                    closeOnClick: false,
                     pauseOnHover: true,
                 });
 
-                alertedAccidentIds.value.add(ride.rideId);
+                // Store에 '알림 보냄' 기록
+                notificationStore.markAsAlerted(ride.rideId);
                 notificationStore.fetchNotifications();
             }
         }
