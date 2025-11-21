@@ -27,6 +27,7 @@ import apiClient from '@/api/index.js';
 import UserList from '@/components/UserList.vue';
 import RealtimeMap from '@/components/RealtimeMap.vue';
 import { useNotificationStore } from '@/stores/notification.store.js';
+import { useToast } from 'vue-toastification'; // (★추가★) 토스트 훅 가져오기
 
 // (수정) 지도 컴포넌트 참조를 위한 ref
 const realtimeMapRef = ref(null);
@@ -39,6 +40,7 @@ const isListOpen = ref(true);
 const timer = ref(null);
 const alertedAccidentIds = ref(new Set());
 const notificationStore = useNotificationStore();
+const toast = useToast(); // (★추가★) 토스트 사용 선언
 
 const dismissedAccidentRideIds = ref(new Set());
 const STORAGE_KEY = 'dismissed_accident_ids';
@@ -121,13 +123,23 @@ const fetchAllData = async () => {
             allRidesMap.set(ride.rideId, ride);
         });
 
+        // (★수정★) alert 대신 toast 사용
         for (const ride of allRidesMap.values()) {
             if (
                 ride.accident &&
                 !alertedAccidentIds.value.has(ride.rideId) &&
                 !dismissedAccidentRideIds.value.has(ride.rideId)
             ) {
-                alert(`🚨 [사고 발생] 🚨\n\n사용자 ID: ${ride.id}\nPM ID: ${ride.pmId}\n\n즉시 확인이 필요합니다.`);
+                // 🚨 기존 alert 코드 삭제됨
+                // alert(`🚨 [사고 발생] 🚨\n\n사용자 ID: ${ride.id}\nPM ID: ${ride.pmId}\n\n즉시 확인이 필요합니다.`);
+
+                // ✨ 신규 Toast 알림 적용
+                toast.error(`🚨 사고 발생!\n사용자: ${ride.id}\nPM: ${ride.pmId}`, {
+                    timeout: 10000, // 10초 동안 표시 (중요하니까 조금 길게)
+                    closeOnClick: false, // 클릭해도 닫히지 않음 (X 버튼으로 닫기)
+                    pauseOnHover: true,
+                });
+
                 alertedAccidentIds.value.add(ride.rideId);
                 notificationStore.fetchNotifications();
             }
